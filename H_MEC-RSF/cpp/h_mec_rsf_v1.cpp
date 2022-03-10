@@ -43,7 +43,7 @@ to do:
 #include <fstream>
 #include <string>
 #include <vector>
-#include <Eigen/Eigen>
+#include <eigen3/Eigen/Eigen>
 #include <random>
 #include <ctime>
 #include <math.h>
@@ -56,7 +56,7 @@ using namespace Eigen;
 // ====================================================================================
 
 // set timestep limit
-const int num_timesteps = 2;
+const int num_timesteps = 10; // very small number for testing
 
 // ========================================
 // Define Numerical model
@@ -98,12 +98,12 @@ const double yend = ysize;
 // define type and replace : operator
 VectorXd x = VectorXd::LinSpaced(Nx, xbeg, xend); // horizontal coordinates of basic grid points
 VectorXd y = VectorXd::LinSpaced(Ny, ybeg, yend); // vertical coordinates of basic grid points
-VectorXd xvx = VectorXd::LinSpaced(Nx, xbeg, xend + dx); // Horizontal coordinates of Vx - nodes
-VectorXd yvx = VectorXd::LinSpaced(Ny, ybeg - dy / 2., yend + dy / 2); // Vertical coordinates of Vx - nodes
-VectorXd xvy = VectorXd::LinSpaced(Nx, xbeg - dx / 2, xend + dx / 2); // Horizontal coordinates of Vy - nodes
-VectorXd yvy = VectorXd::LinSpaced(Ny, ybeg, yend + dy); // Vertical coordinates of Vy - nodes
-VectorXd xp = VectorXd::LinSpaced(Nx, xbeg - dx / 2, xend + dx / 2); // Horizontal coordinates of P - nodes
-VectorXd yp = VectorXd::LinSpaced(Ny, ybeg - dy / 2, yend + dy / 2); // Vertical coordinates of Vx - nodes
+VectorXd xvx = VectorXd::LinSpaced(Nx1, xbeg, xend + dx); // Horizontal coordinates of Vx - nodes
+VectorXd yvx = VectorXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2); // Vertical coordinates of Vx - nodes
+VectorXd xvy = VectorXd::LinSpaced(Nx1, xbeg - dx / 2, xend + dx / 2); // Horizontal coordinates of Vy - nodes
+VectorXd yvy = VectorXd::LinSpaced(Ny1, ybeg, yend + dy); // Vertical coordinates of Vy - nodes
+VectorXd xp = VectorXd::LinSpaced(Nx1, xbeg - dx / 2, xend + dx / 2); // Horizontal coordinates of P - nodes
+VectorXd yp = VectorXd::LinSpaced(Ny1, ybeg - dy / 2, yend + dy / 2); // Vertical coordinates of Vx - nodes
 
 //               Block  Fault
 Vector2d arsfm = {.03,  .009}; // a - parameter of RSF
@@ -298,7 +298,7 @@ MatrixXd PORY(Ny1, Nx1);
 MatrixXd VY0(Ny1, Nx1);
 MatrixXd VYF0(Ny1, Nx1);
 
-MatrixXd VSLIPB = MatrixXd::Zero(Ny, Nx);
+MatrixXd VSLIPB(Ny, Nx);
 
 // Lagrangian solid markers
 VectorXd rhom(marknum);         // Density of solid
@@ -494,11 +494,10 @@ int main() {
     } else {
         timestep = 1;
         // Basic nodes
-        MatrixXd OM0 = MatrixXd::Constant(Ny, Nx, omm(0));    // Old state parameter
-        MatrixXd OM(Ny, Nx);                                  // State parameter
-        MatrixXd ARSF = MatrixXd::Constant(Ny, Nx, arsfm(0)); // a - parameter of RSF
-        MatrixXd BRSF = MatrixXd::Constant(Ny, Nx, brsfm(0)); // b - parameter of RSF
-        MatrixXd LRSF = MatrixXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
+        OM0 = MatrixXd::Constant(Ny, Nx, omm(0));    // Old state parameter
+        ARSF = MatrixXd::Constant(Ny, Nx, arsfm(0)); // a - parameter of RSF
+        BRSF = MatrixXd::Constant(Ny, Nx, brsfm(0)); // b - parameter of RSF
+        LRSF = MatrixXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
         
         // Unknown parameters
         pt.setZero();  // Total pressure
@@ -585,7 +584,7 @@ int main() {
         VY0.setZero();
         VYF0.setZero();
         
-        MatrixXd VSLIPB = MatrixXd::Zero(Ny, Nx);
+        VSLIPB.setZero();
         
         // Lagrangian solid markers
         rhom.setZero();        // Density of solid
@@ -659,28 +658,14 @@ int main() {
         L.setZero();
         R.setZero();
     }
-
-    cout << "test 0" << endl; // testtesttest
     
     // /////////////////////////////////////////////////////////////////////////////////////// 
     // actual computations start here
     // /////////////////////////////////////////////////////////////////////////////////////// 
 
     for (timestep; timestep <= num_timesteps; timestep++) {
-        
-        RHOSUM.setZero();
-        ETASUM.setZero();
-        KKKSUM.setZero();
-        TTTSUM.setZero();
-        SXYSUM.setZero();
-        GGGSUM.setZero();
-        ETA0SUM.setZero();
-        COHCSUM.setZero();
-        FRICSUM.setZero();
-        DILCSUM.setZero();
-        COHTSUM.setZero();
-        FRITSUM.setZero();
-        WTSUM.setZero();
+
+        cout << "start " << timestep << endl;
 
         // Interpolate ETA, RHO to nodal points
         // Basic nodes
@@ -691,6 +676,7 @@ int main() {
         SXYSUM.setZero();
         GGGSUM.setZero();
         ETA.setZero();
+        ETA0SUM.setZero();
         COHCSUM.setZero();
         FRICSUM.setZero();
         DILCSUM.setZero();
@@ -728,7 +714,7 @@ int main() {
         PORYSUM.setZero();
         VY0SUM.setZero();
         WTYSUM.setZero();
-        
+
         // Cycle on markers
         for (int m = 0; m < marknum; m++) {
             
@@ -741,7 +727,7 @@ int main() {
             if (kkkmm > kkkmax) {
                 kkkmm = kkkmax;
             }
-            
+
             // Cohesion, friction of porous matrix
             
             // Viscosity of porous matrix
@@ -795,19 +781,19 @@ int main() {
             // Indexes and distances
             double j = fix(xm(m) / dx);
             double i = fix(ym(m) / dy);
-            if (j < 1) {
-                j = 1;
-            } else if (j > Nx - 1) {
-                j = Nx - 1;
+            if (j < 0) {
+                j = 0;
+            } else if (j > Nx - 2) {
+                j = Nx - 2;
             }
-            if (i < 1) {
-                i = 1;
-            } else if (i > Ny - 1) {
-                i = Ny - 1;
+            if (i < 0) {
+                i = 0;
+            } else if (i > Ny - 2) {
+                i = Ny - 2;
             }
             dxm = (xm(m) - x(j)) / dx;
             dym = (ym(m) - y(i)) / dy;
-            
+
             // /////////////////////////////////////////////////////////////////////////////////////// 
             // many very similar computations. Maybe write a function to do it instead
             // /////////////////////////////////////////////////////////////////////////////////////// 
@@ -841,9 +827,9 @@ int main() {
             COHCSUM(i + 1, j) += cohescmm * wtmi1j;
             FRICSUM(i + 1, j) += frictcmm * wtmi1j;
             DILCSUM(i + 1, j) += dilatcmm * wtmi1j;
-            
+
             WTSUM(i + 1, j) += wtmi1j;
-            
+
             wtmij1 = (dxm) * (1 - dym);
             ETASUM(i, j + 1) += etamm * wtmij1;
             RHOSUM(i, j + 1) += rhomm * wtmij1;
@@ -857,7 +843,7 @@ int main() {
             COHCSUM(i, j + 1) += cohescmm * wtmij1;
             FRICSUM(i, j + 1) += frictcmm * wtmij1;
             DILCSUM(i, j + 1) += dilatcmm * wtmij1;
-            
+
             WTSUM(i, j + 1) += wtmij1;
             
             wtmi1j1 = (dxm) * (dym);
@@ -873,9 +859,9 @@ int main() {
             COHCSUM(i + 1, j + 1) += cohescmm * wtmi1j1;
             FRICSUM(i + 1, j + 1) += frictcmm * wtmi1j1;
             DILCSUM(i + 1, j + 1) += dilatcmm * wtmi1j1;
-            
+
             WTSUM(i + 1, j + 1) += wtmi1j1;
-            
+
             // Interpolate to pressure nodes
             // [i, j] -------- [i, j + 1]
             //   |                |
@@ -885,15 +871,15 @@ int main() {
             // Indexes and distances
             j = fix((xm(m) + dx / 2) / dx);
             i = fix((ym(m) + dy / 2) / dy);
-            if (j < 1) {
-                j = 1;
-            } else if (j > Nx) {
-                j = Nx;
+            if (j < 0) {
+                j = 0;
+            } else if (j > Nx - 2) {
+                j = Nx - 2;
             }
-            if (i < 1) {
-                i = 1;
-            } else if (i > Ny) {
-                i = Ny;
+            if (i < 0) {
+                i = 0;
+            } else if (i > Ny - 2) {
+                i = Ny - 2;
             }
             
             dxm = (xm(m) - xp(j)) / dx;
@@ -928,7 +914,7 @@ int main() {
             ETAP0SUM(i, j + 1) += etamm0 * wtmij1;
             ETAB0SUM(i, j + 1) += etasmm0 * wtmij1;
             WTPSUM(i, j + 1) += wtmij1;
-            
+
             wtmi1j1 = (dxm) * (dym);
             ETAPSUM(i + 1, j + 1) += etamm * wtmi1j1;
             PORSUM(i + 1, j + 1) += porm(m) * wtmi1j1;
@@ -948,19 +934,18 @@ int main() {
             // Indexes and distances
             j = fix((xm(m)) / dx);
             i = fix((ym(m) + dy / 2) / dy);
-            if (j < 1) {
-                j = 1;
-            } else if (j > Nx - 1) {
-                j = Nx - 1;
+            if (j < 0) {
+                j = 0;
+            } else if (j > Nx - 2) {
+                j = Nx - 2;
             }
-            if (i < 1) {
-                i = 1;
-            } else if (i > Ny) {
-                i = Ny;
+            if (i < 0) {
+                i = 0;
+            } else if (i > Ny - 2) {
+                i = Ny - 2;
             }
             dxm = (xm(m) - xvx(j)) / dx;
             dym = (ym(m) - yvx(i)) / dy;
-            
             
             wtmij = (1 - dxm) * (1 - dym);
             RHOXSUM(i, j) += rhomm * wtmij;
@@ -1003,15 +988,15 @@ int main() {
             // Indexes and distances
             j = fix((xm(m) + dx / 2) / dx);
             i = fix((ym(m)) / dy);
-            if (j < 1) {
-                j = 1;
-            } else if (j > Nx) {
-                j = Nx;
+            if (j < 0) {
+                j = 0;
+            } else if (j > Nx - 2) {
+                j = Nx - 2;
             }
-            if (i < 1) {
-                i = 1;
-            } else if (i > Ny - 1) {
-                i = Ny - 1;
+            if (i < 0) {
+                i = 0;
+            } else if (i > Ny - 2) {
+                i = Ny - 2;
             }
             dxm = (xm(m) - xvy(j)) / dx;
             dym = (ym(m) - yvy(i)) / dy;
@@ -1050,8 +1035,6 @@ int main() {
             
         } // ends loop through markers
 
-        cout << "test " << timestep << " marker" << endl; // testtesttest
-        
         // Computing ETA and RHO
         for (int i = 0; i < Ny; i++) {
             // Basic nodes
@@ -1580,12 +1563,13 @@ int main() {
             cout << "test " << timestep << " start solving LSE" << endl; // testtesttest
             
             // 6) Solving matrix
-            SparseLU<SparseMatrix<double>> solver;
+            SparseQR<SparseMatrix<double>, COLAMDOrdering<int>> solver;
             L.makeCompressed();
             solver.analyzePattern(L);
             solver.factorize(L);
-            if (solver.info() != Success) cout << "Decomposition Failed." << endl;
             S = solver.solve(R); // This line causes about 60% of all computational cost
+
+            cout << "LSE success" << endl;
             
             // 7) Reload solution
             // pfavr = 0;
@@ -1680,51 +1664,51 @@ int main() {
             pt.col(0) = pt.col(1);
             pt.col(Nx) = pt.col(Nx - 1);
             pt.row(0) = pt.row(1);
-            pt.col(Ny) = pt.row(Ny - 1);
+            pt.row(Ny) = pt.row(Ny - 1);
             pf.col(0) = pf.col(1);
             pf.col(Nx) = pf.col(Nx - 1);
             pf.row(0) = pf.row(1);
-            pf.col(Ny) = pf.row(Ny - 1);
+            pf.row(Ny) = pf.row(Ny - 1);
             EXX.col(0) = EXX.col(1);
             EXX.col(Nx) = EXX.col(Nx - 1);
             EXX.row(0) = EXX.row(1);
-            EXX.col(Ny) = EXX.row(Ny - 1);
+            EXX.row(Ny) = EXX.row(Ny - 1);
             SXX.col(0) = SXX.col(1);
             SXX.col(Nx) = SXX.col(Nx - 1);
             SXX.row(0) = SXX.row(1);
-            SXX.col(Ny) = SXX.row(Ny - 1);
+            SXX.row(Ny) = SXX.row(Ny - 1);
             SXX0.col(0) = SXX0.col(1);
             SXX0.col(Nx) = SXX0.col(Nx - 1);
             SXX0.row(0) = SXX0.row(1);
-            SXX0.col(Ny) = SXX0.row(Ny - 1);
+            SXX0.row(Ny) = SXX0.row(Ny - 1);
             EYY.col(0) = EYY.col(1);
             EYY.col(Nx) = EYY.col(Nx - 1);
             EYY.row(0) = EYY.row(1);
-            EYY.col(Ny) = EYY.row(Ny - 1);
+            EYY.row(Ny) = EYY.row(Ny - 1);
             SYY.col(0) = SYY.col(1);
             SYY.col(Nx) = SYY.col(Nx - 1);
             SYY.row(0) = SYY.row(1);
-            SYY.col(Ny) = SYY.row(Ny - 1);
+            SYY.row(Ny) = SYY.row(Ny - 1);
             SYY0.col(0) = SYY0.col(1);
             SYY0.col(Nx) = SYY0.col(Nx - 1);
             SYY0.row(0) = SYY0.row(1);
-            SYY0.col(Ny) = SYY0.row(Ny - 1);
+            SYY0.row(Ny) = SYY0.row(Ny - 1);
             ETAP.col(0) = ETAP.col(1);
             ETAP.col(Nx) = ETAP.col(Nx - 1);
             ETAP.row(0) = ETAP.row(1);
-            ETAP.col(Ny) = ETAP.row(Ny - 1);
+            ETAP.row(Ny) = ETAP.row(Ny - 1);
             ETAB.col(0) = ETAB.col(1);
             ETAB.col(Nx) = ETAB.col(Nx - 1);
             ETAB.row(0) = ETAB.row(1);
-            ETAB.col(Ny) = ETAB.row(Ny - 1);
+            ETAB.row(Ny) = ETAB.row(Ny - 1);
             GGGP.col(0) = GGGP.col(1);
             GGGP.col(Nx) = GGGP.col(Nx - 1);
             GGGP.row(0) = GGGP.row(1);
-            GGGP.col(Ny) = GGGP.row(Ny - 1);
+            GGGP.row(Ny) = GGGP.row(Ny - 1);
             GGGB.col(0) = GGGB.col(1);
             GGGB.col(Nx) = GGGB.col(Nx - 1);
             GGGB.row(0) = GGGB.row(1);
-            GGGB.col(Ny) = GGGB.row(Ny - 1);
+            GGGB.row(Ny) = GGGB.row(Ny - 1);
             
             // Compute stress and strain rate invariants and dissipation
             // Process pressure cells
@@ -1969,6 +1953,7 @@ int main() {
             }
             maxvxs = 0;
             maxvys = 0;
+
             for (int i = 0; i < Ny1; i++) {
                     for (int j = 0; j < Nx1; j++) {
                     if (yvx(i) >= upper_block && yvx(i) <= lower_block) {
@@ -2040,8 +2025,12 @@ int main() {
             
             // Exit iteration
             if (ynstop) {
+                cout << "break " << timestep << endl;
                 break;
             }
+
+            cout << "end " << timestep << endl;
+
             ynlast++;
         }
              
@@ -2358,7 +2347,7 @@ int main() {
             if (timesum == dt) {
                 ofstream out_fault;
                 out_fault.open("x_fault.txt");
-                cout << x << endl;
+                out_fault << x << endl;
                 out_fault.close();
             }
             
@@ -2366,63 +2355,63 @@ int main() {
                 // ========== save slip rate
                 ofstream out_Vslip;
                 out_Vslip.open("EVO_Vslip.txt");
-                cout << timesum << "    " << dt << "    " << VSLIPB.col(line_fault) << endl; // might be .row() ???
+                out_Vslip << timesum << "    " << dt << "    " << VSLIPB.col(line_fault) << endl; // might be .row() ???
                 out_Vslip.close();
                 
                 // ========== save viscosity
                 ofstream out_viscosity;
                 out_viscosity.open("EVO_viscosity.txt");
-                cout << timesum << "    " << dt << "    " << ETA.col(line_fault) << endl; // might be .row() ???
+                out_viscosity << timesum << "    " << dt << "    " << ETA.col(line_fault) << endl; // might be .row() ???
                 out_viscosity.close();
                 
                 // ========== save fluid 
                 ofstream out_press_flu;
                 out_press_flu.open("EVO_press_flu.txt");
-                cout << timesum << "    " << dt << "    " << pf_ave.col(line_fault) << endl; // might be .row() ???
+                out_press_flu << timesum << "    " << dt << "    " << pf_ave.col(line_fault) << endl; // might be .row() ???
                 out_press_flu.close();
                 
                 // ========== save effective pressure
                 ofstream out_press_eff;
                 out_press_eff.open("EVO_press_eff.txt");
                 MatrixXd P_diff = pt_ave - pf_ave;
-                cout << timesum << "    " << dt << "    " << P_diff.col(line_fault) << endl; // might be .row() ???
+                out_press_eff << timesum << "    " << dt << "    " << P_diff.col(line_fault) << endl; // might be .row() ???
                 out_press_eff.close();
                 
                 // ========== save SigmaY
                 ofstream out_SigmaY;
                 out_SigmaY.open("EVO_SigmaY.txt");
-                cout << timesum << "    " << dt << "    " << SigmaY.col(line_fault) << endl; // might be .row() ???
+                out_SigmaY << timesum << "    " << dt << "    " << SigmaY.col(line_fault) << endl; // might be .row() ???
                 out_SigmaY.close();
                 
                 // ========== save SII
                 ofstream out_Sii;
                 out_Sii.open("EVO_Sii.txt");
-                cout << timesum << "    " << dt << "    " << SII_fault.col(line_fault) << endl; // might be .row() ???
+                out_Sii << timesum << "    " << dt << "    " << SII_fault.col(line_fault) << endl; // might be .row() ???
                 out_Sii.close();
                 
                 // ========== save Theta
                 ofstream out_Theta;
                 out_Theta.open("EVO_Theta.txt");
-                cout << timesum << "    " << dt << "    " << OM.col(line_fault) << endl; // might be .row() ???
+                out_Theta << timesum << "    " << dt << "    " << OM.col(line_fault) << endl; // might be .row() ???
                 out_Theta.close();
                 
                 // ========== save viscous compaction
                 ofstream out_Visc_comp;
                 out_Visc_comp.open("EVO_Visc_comp.txt");
-                cout << timesum << "    " << dt << "    " << VIS_COMP.col(line_fault) << endl; // might be .row() ???
+                out_Visc_comp << timesum << "    " << dt << "    " << VIS_COMP.col(line_fault) << endl; // might be .row() ???
                 out_Visc_comp.close();
                 
                 // ========== save elastic compaction
                 ofstream out_Elast_comp;
                 out_Elast_comp.open("EVO_Elast_comp.txt");
-                cout << timesum << "    " << dt << "    " << EL_DECOM.col(line_fault) << endl; // might be .row() ???
+                out_Elast_comp << timesum << "    " << dt << "    " << EL_DECOM.col(line_fault) << endl; // might be .row() ???
                 out_Elast_comp.close();
                 
                 // ========== save time, dt, vmax
                 ofstream out_data;
                 out_data.open("EVO_data.txt");
                 Vmax = VSLIPB.maxCoeff();
-                cout << timesum << "    " << dt << "    " << Vmax << "    " << ynlast << "    " << iterstep << endl;
+                out_data << timesum << "    " << dt << "    " << Vmax << "    " << ynlast << "    " << iterstep << endl;
                 out_data.close();
                 
                 timesum_plus = timesum;
@@ -2432,7 +2421,7 @@ int main() {
         if (fix(timestep / savematstep) * savematstep == timestep) {
             ofstream out_file;
             out_file.open("file.txt");
-            cout << timestep << endl;
+            out_file << timestep << endl;
             out_file.close();
 
             ofstream out_save_timestep;
