@@ -56,15 +56,24 @@ using namespace Eigen;
 // ====================================================================================
 
 // set timestep limit
-const int num_timesteps = 10;
+const int num_timesteps = 2;
 
 // ========================================
 // Define Numerical model
 // Eulerian basic grid
+/*
 const double xsize = 40000.;      // size in horizontal direction, m
 const double ysize = 10000.;      // size in vertical direction, m
 const int Nx = 161;               // number of grid steps in horizontal directions
 const int Ny = 41;                // number of grid steps in vertical direction
+*/
+
+// very tiny test system
+const double xsize = 10000.;      // size in horizontal direction, m
+const double ysize = 2500.;      // size in vertical direction, m
+const int Nx = 41;               // number of grid steps in horizontal directions
+const int Ny = 11;
+
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
 const int Ny1 = Ny + 1;           // Number of vertical lines for staggered grid
@@ -386,7 +395,7 @@ MatrixXd VIS_COMP(Ny1, Nx1);
 // (3) Defining global matrixes
 // according to the global number of unknowns
 SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
-VectorXd R = VectorXd::Zero(N); // Vector of the right parts of equations
+SparseVector<double> R(N); // Vector of the right parts of equations
 VectorXd S(N);
 
 // variable type declaration
@@ -1210,7 +1219,7 @@ int main() {
                         // Ghost nodes: 1 * vxs = 0
                         if (j == Nx) {
                             L.coeffRef(kx, kx) = 1;
-                            R(kx) = 0;
+                            R.coeffRef(kx) = 0;
                         }
                         
                         // Upper boundary
@@ -1218,7 +1227,7 @@ int main() {
                         if (i == 0 && j < Nx) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx + 6) = 1;
-                            R(kx) = 2 * bcupper;
+                            R.coeffRef(kx) = 2 * bcupper;
                         }
                         
                         // Lower boundary
@@ -1226,21 +1235,21 @@ int main() {
                         if (i == Ny && j < Nx) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx - 6) = 1;
-                            R(kx) = 2 * bclower;
+                            R.coeffRef(kx) = 2 * bclower;
                         }
                         
                         // Left boundary:
                         if (j == 0 && i > 0 && i < Ny) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx + 6 * Ny1) = -1;
-                            R(kx) = 0;
+                            R.coeffRef(kx) = 0;
                         }
                         
                         // Right boundary
                         if (j == Nx - 1 && i > 0 && i < Ny) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx - 6 * Ny1) = -1;
-                            R(kx) = 0;
+                            R.coeffRef(kx) = 0;
                         }
                         
                     } else {
@@ -1294,7 +1303,7 @@ int main() {
                         L.coeffRef(kx, kp) = ptscale / dx; //Pt1'
                         L.coeffRef(kx, kp + Ny1 * 6) = -ptscale / dx; //Pt2'
                         // Right part
-                        R(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
+                        R.coeffRef(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
                     
                     // 5b) Composing equation for vys
@@ -1302,7 +1311,7 @@ int main() {
                         // Ghost nodes: 1 * vys = 0
                         if (i == Ny) {
                             L.coeffRef(ky, ky) = 1;
-                            R(ky) = 0;
+                            R.coeffRef(ky) = 0;
                         }
                         
                         // Left boundary
@@ -1310,7 +1319,7 @@ int main() {
                         if (j == 0) {
                             L.coeffRef(ky, ky) = 1;
                             L.coeffRef(ky, ky + Ny1 * 6) = 1;
-                            R(ky) = 0;
+                            R.coeffRef(ky) = 0;
                         }
                         
                         // Right boundary
@@ -1318,19 +1327,19 @@ int main() {
                         if (j == Nx) {
                             L.coeffRef(ky, ky) = 1;
                             L.coeffRef(ky, ky - Ny1 * 6) = 1;
-                            R(ky) = 0;
+                            R.coeffRef(ky) = 0;
                         }
                         
                         // Upper boundary: no penetration
                         if (i == 0 && j > 0 && j < Nx) {
                             L.coeffRef(ky, ky) = 1;
-                            R(ky) = 0;
+                            R.coeffRef(ky) = 0;
                         }
                         
                         // Lower boundary: no penetration
                         if (i == Ny - 1 && j > 0 && j < Nx) {
                             L.coeffRef(ky, ky) = 1;
-                            R(ky) = 0;
+                            R.coeffRef(ky) = 0;
                         }
                         
                     } else {
@@ -1387,14 +1396,14 @@ int main() {
                         L.coeffRef(ky, kp) = ptscale / dy; //Pt1'
                         L.coeffRef(ky, kp + 6) = -ptscale / dy; //Pt2'
                         // Right part
-                        R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
+                        R.coeffRef(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
                     
                     // 5c) Composing equation for Pt
                     if (i == 0 || j == 0 || i == Ny || j == Nx) { // || (i == 2 && j == 2))
                         // BC equation: 1 * Pt = 0
                         L.coeffRef(kp, kp) = 1;
-                        R(kp) = 0;
+                        R.coeffRef(kp) = 0;
                     } else {
                         // Solid Continuity: dVxs / dx + dVys / dy + (Pt - Pf) / ETAbulk = 0
                         //              vys1
@@ -1414,7 +1423,7 @@ int main() {
                         L.coeffRef(kp, kp) = ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED / dt); //Pt
                         L.coeffRef(kp, kpf) = -pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / dt); //Pf
                         // Right part
-                        R(kp) = BETTADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
+                        R.coeffRef(kp) = BETTADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
                     }
                     
                     // 5d) Composing equation for vxD
@@ -1422,35 +1431,35 @@ int main() {
                         // Ghost nodes: 1 * vxs = 0
                         if (j == Nx) {
                             L.coeffRef(kxf, kxf) = 1;
-                            R(kxf) = 0;
+                            R.coeffRef(kxf) = 0;
                         }
                         
                         // Upper boundary: symmetry
                         if (i == 0 && j < Nx) {
                             L.coeffRef(kxf, kxf) = 1;
                             L.coeffRef(kxf, kxf + 6) = -1;
-                            R(kxf) = 0;
+                            R.coeffRef(kxf) = 0;
                         }
                         
                         // Lower boundary: symmetry
                         if (i == Ny && j < Nx) {
                             L.coeffRef(kxf, kxf) = 1;
                             L.coeffRef(kxf, kxf - 6) = -1;
-                            R(kxf) = 0;
+                            R.coeffRef(kxf) = 0;
                         }
                         
                         // Left boundary
                         // no penetration
                         if (j == 0) {
                             L.coeffRef(kxf, kxf) = 1;
-                            R(kxf) = 0; //bcvxfleft;
+                            R.coeffRef(kxf) = 0; //bcvxfleft;
                         }
                         
                         // Right boundary
                         // no penetration
                         if (j == Nx - 1) {
                             L.coeffRef(kxf, kxf) = 1;
-                            R(kxf) = 0;
+                            R.coeffRef(kxf) = 0;
                         }
                         
                     } else {
@@ -1464,7 +1473,7 @@ int main() {
                         L.coeffRef(kxf, kpf) = pfscale / dx; //Pf1'
                         L.coeffRef(kxf, kpf + Ny1 * 6) = -pfscale / dx; //Pf2'
                         // Right part
-                        R(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
+                        R.coeffRef(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
                     }
                     
                     // 5e) Composing equation for vyD
@@ -1472,7 +1481,7 @@ int main() {
                         // Ghost nodes: 1 * vxs = 0
                         if (i == Ny) {
                             L.coeffRef(kyf, kyf) = 1;
-                            R(kyf) = 0;
+                            R.coeffRef(kyf) = 0;
                         }
                         
                         // Left boundary
@@ -1480,7 +1489,7 @@ int main() {
                         if (j == 0 && i > 0 && i < Ny - 1) {
                             L.coeffRef(kyf, kyf) = 1;
                             L.coeffRef(kyf, kyf + Ny1 * 6) = -1;
-                            R(kyf) = 0;
+                            R.coeffRef(kyf) = 0;
                         }
                         
                         // Right boundary
@@ -1488,19 +1497,19 @@ int main() {
                         if (j == Nx && i > 0 && i < Ny - 1) {
                             L.coeffRef(kyf, kyf) = 1;
                             L.coeffRef(kyf, kyf - Ny1 * 6) = -1;
-                            R(kyf) = 0;
+                            R.coeffRef(kyf) = 0;
                         }
                         
                         // Upper boundary: no penetration
                         if (i == 0) {
                             L.coeffRef(kyf, kyf) = 1;
-                            R(kyf) = bcvyflower;
+                            R.coeffRef(kyf) = bcvyflower;
                         }
                         
                         // Lower boundary: no penetration
                         if (i == Ny - 1) {
                             L.coeffRef(kyf, kyf) = 1;
-                            R(kyf) = bcvyflower;
+                            R.coeffRef(kyf) = bcvyflower;
                         }
                     } else {
                         // Fluid Y - Darsi:  - ETAfluid / K * VyD - dPf / dy = -RHOf * gy + RHOf * DVys / Dt
@@ -1517,7 +1526,7 @@ int main() {
                         L.coeffRef(kyf, kpf) = pfscale / dy; //Pf1'
                         L.coeffRef(kyf, kpf + 6) = -pfscale / dy; //Pf2'
                         // Right part
-                        R(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
+                        R.coeffRef(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
                     }
                     
                     
@@ -1525,20 +1534,20 @@ int main() {
                     if (j == 0 || j == Nx || i <= 1 || i >= Ny - 1) {
                         // BC equation: 1 * Pf = 0
                         L.coeffRef(kpf, kpf) = 1;
-                        R(kpf) = 0;
+                        R.coeffRef(kpf) = 0;
                         
                         // Real BC
                         if (i == 1) {
                             L.coeffRef(kpf, kpf) = 1 * pfscale;
                             L.coeffRef(kpf, kp) = -1 * ptscale;
-                            R(kpf) = -PTFDIFF;
+                            R.coeffRef(kpf) = -PTFDIFF;
                         }
                         
                         // Real BC
                         if (i == Ny - 1) {
                             L.coeffRef(kpf, kpf) = 1 * pfscale;
                             L.coeffRef(kpf, kp) = -1 * ptscale;
-                            R(kpf) = -PTFDIFF;
+                            R.coeffRef(kpf) = -PTFDIFF;
                         }
                         
                     } else {
@@ -1563,14 +1572,19 @@ int main() {
                         L.coeffRef(kpf, kp) = -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / dt); //Pt
                         L.coeffRef(kpf, kpf) = pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / KSK / dt); //Pf
                         // Right part
-                        R(kpf) = -BETTADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
+                        R.coeffRef(kpf) = -BETTADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
                 }
             }
+
+            cout << "test " << timestep << " start solving LSE" << endl; // testtesttest
             
             // 6) Solving matrix
             SparseLU<SparseMatrix<double>> solver;
-            solver.compute(L);
+            L.makeCompressed();
+            solver.analyzePattern(L);
+            solver.factorize(L);
+            if (solver.info() != Success) cout << "Decomposition Failed." << endl;
             S = solver.solve(R); // This line causes about 60% of all computational cost
             
             // 7) Reload solution
