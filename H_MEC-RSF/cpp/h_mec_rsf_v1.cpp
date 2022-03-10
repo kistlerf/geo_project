@@ -123,11 +123,8 @@ const double friction = .6;     // Internal friction coefficient confined
 const double dilatation = 0.;  // Dilatation coefficient confined
 const double tensile = 1.;      // Internal friction coefficient tensile
 const double shearmod = 3.e10; // Shear modulus
-const double BETTAFLUID = 1.e-8;  // 4.0e-10; // Compressibility of fluid, 1 / Pa
-const double BETTASOLID = 2.e-11; // 2.5e-11; // Compressibility of solid, 1 / Pa
-const double PORDIL = .15;      // Upper limit of porosity for dilatation
-const double ESLIP0 = 1.e04;     // ETHAslip LN model, Pa s
-const double VSLIP0 = .5e-9;    // Characteristic velocity, m / s
+const double BETAFLUID = 1.e-8;  // 4.0e-10; // Compressibility of fluid, 1 / Pa
+const double BETASOLID = 2.e-11; // 2.5e-11; // Compressibility of solid, 1 / Pa
 const double faultwidth = dx;    // Characteristic fault width, m
 
 // ========================================
@@ -136,30 +133,17 @@ const double gx = 0.;             // Horizontal gravity, m / s^2
 const double gy = 0.;             // Vertical gravity, m / s^2
 const double PCONF = 1.e7;     // Confining pressure
 const double PTFDIFF = 3.e7;    // Total - Fluid Pressure difference in the top row, Pa
-const double SIGMALOAD = 0.;      // SIGMAyy at the top, Pa
-const double ETATOP = 1.e-3;      // Viscosity of the sticky water, Pa * s
 
 // ========================================
 // Limits
-const double pormin = 1e-4; // Min porosity limit
-const double pormax = 1 - pormin; // Max porosity limit
 const double etamin = 1e-3; // Lower shear viscosity cutoff
 const double etamax = 1e50; // Upper shear viscosity cutoff
-const double etabmin = 1e-3; // Lower bulk viscosity cutoff
-const double etabmax = 1e+25; // Upper bulk viscosity cutoff
-const double gmin = 1e08; // Lower shear modulus cutoff
-const double gmax = 1e11; // Upper shear modulus cutoff
 const double kkkmin = 1e-22; // Lower Darsi viscosity cutoff
 const double kkkmax = 1e-12; // Upper Darsi viscosity cutoff
-const double dsubgrids = 0; // Subgrid diffusion for stresses
-const double dsubgridv = 0; // Subgrid diffusion for velocity
 const double stpmax = 2e-4; // / dy * faultwidth; // Max gridstep fraction for marker displacement in the channel
 const double stpmax1 = 6e-5; // / dy * faultwidth; // Max gridstep fraction for marker displacement
-const double peffmax = PTFDIFF; // Pressure to normalise timestep
 
 //Boundary conditions
-const double bcleft = 1;
-const double bcright = 1;
 const double bcupper = -2e-9;
 const double bclower = 2e-9;
 const double bcvyflower = 0;// - 1e-12;
@@ -172,7 +156,6 @@ double dt = dtelastic0;
 const double dtmin = 1e-4;
 
 const double ascale = 1e+0;
-const double dtreset = 1e-20; // Minimum timestep for velocity reset
 
 // Timesteps between visualization frames
 const int savematstep = 300;  // storage periodicity
@@ -405,7 +388,7 @@ double dt00, etamincur;
 
 int ynlast;
 
-double KXX, IETAPL, BETTADRAINED, KBW, KSK, KXY;
+double KXX, IETAPL, BETADRAINED, KBW, KSK, KXY;
 
 double pfscale, ptscale;
 
@@ -652,9 +635,6 @@ int main() {
                 }
             }
         }
-        // Average porosity
-        double poravr0 = porm.mean();
-        
         L.setZero();
         R.setZero();
     }
@@ -663,7 +643,7 @@ int main() {
     // actual computations start here
     // /////////////////////////////////////////////////////////////////////////////////////// 
 
-    for (timestep; timestep <= num_timesteps; timestep++) {
+    for (; timestep <= num_timesteps; timestep++) {
 
         cout << "start " << timestep << endl;
 
@@ -1395,18 +1375,18 @@ int main() {
                         //               |
                         //              vys2
                         // Drained compressibility
-                        BETTADRAINED = (1 / GGGB(i, j) + BETTASOLID) / (1 - POR(i, j));
+                        BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
-                        KBW = 1 - BETTASOLID / BETTADRAINED;
+                        KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
                         L.coeffRef(kp, kx - Ny1 * 6) = -1 / dx; //vxs1
                         L.coeffRef(kp, kx) = 1 / dx; //vxs2
                         L.coeffRef(kp, ky - 6) = -1 / dy; //vys1
                         L.coeffRef(kp, ky) = 1 / dy; //vys2
-                        L.coeffRef(kp, kp) = ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED / dt); //Pt
-                        L.coeffRef(kp, kpf) = -pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / dt); //Pf
+                        L.coeffRef(kp, kp) = ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt); //Pt
+                        L.coeffRef(kp, kpf) = -pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt); //Pf
                         // Right part
-                        R.coeffRef(kp) = BETTADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
+                        R.coeffRef(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
                     }
                     
                     // 5d) Composing equation for vxD
@@ -1542,20 +1522,20 @@ int main() {
                         //              vyD2
                         // Compute elastic coefficients
                         // Drained compressibility
-                        BETTADRAINED = (1 / GGGB(i, j) + BETTASOLID) / (1 - POR(i, j));
+                        BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
-                        KBW = 1 - BETTASOLID / BETTADRAINED;
+                        KBW = 1 - BETASOLID / BETADRAINED;
                         // Skempton koefficient
-                        KSK = (BETTADRAINED - BETTASOLID) / (BETTADRAINED - BETTASOLID + POR(i, j) * (BETTAFLUID - BETTASOLID));
+                        KSK = (BETADRAINED - BETASOLID) / (BETADRAINED - BETASOLID + POR(i, j) * (BETAFLUID - BETASOLID));
                         // Left part
                         L.coeffRef(kpf, kxf - Ny1 * 6) = -1 / dx; //vxs1
                         L.coeffRef(kpf, kxf) = 1 / dx; //vxs2
                         L.coeffRef(kpf, kyf - 6) = -1 / dy; //vys1
                         L.coeffRef(kpf, kyf) = 1 / dy; //vys2
-                        L.coeffRef(kpf, kp) = -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / dt); //Pt
-                        L.coeffRef(kpf, kpf) = pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / KSK / dt); //Pf
+                        L.coeffRef(kpf, kp) = -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt); //Pt
+                        L.coeffRef(kpf, kpf) = pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt); //Pf
                         // Right part
-                        R.coeffRef(kpf) = -BETTADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
+                        R.coeffRef(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
                 }
             }
@@ -1594,16 +1574,11 @@ int main() {
             }
             
             Vmax = VSLIPB.maxCoeff();
-
-            bool pres_correction;
             
             if (dt > 1e4 && Vmax < 1e-7) {
-                pres_correction = true;
                 avgpt = pt.sum() / (pt.rows() * pt.cols()); //calculate average total pressure
                 diffpt = (PCONF + PTFDIFF) - avgpt;
                 pt += MatrixXd::Constant(Ny1, Nx1, diffpt);
-            } else {
-                pres_correction = false;
             }
             
             // Velocity change
@@ -1741,7 +1716,6 @@ int main() {
             SII_fault.setZero();
             int ynpl = 0;
             double ddd = 0;
-            double dtrobert = dt;
             dtlapusta = 1e7;
             OM5 = OM;
             
@@ -1806,7 +1780,6 @@ int main() {
                             
                             if ((DSIIB1 >= 0 && DSIIB2 <= 0) || (DSIIB1 <= 0 && DSIIB2 >= 0)) {
                                 double DSIIB = 1e+9;
-                                int ijk = 0;
                                 
                                 while(abs(DSIIB) > 1e-3) {
                                     SIIB4 = (SIIB1 + SIIB2) / 2;
@@ -1828,7 +1801,6 @@ int main() {
                                     } else {
                                         SIIB2 = SIIB4;
                                     }
-                                    ijk++;
                                 }
                             }
                             
@@ -1846,25 +1818,21 @@ int main() {
                             syield = max(syieldmin, (ptB - pfB) * ARSF(i, j) * asinh(V / 2 / V0 * exp((BRSF(i, j) * OM5(i, j) + FRIC(i, j)) / ARSF(i, j))));
                             
                             // Compute visco - plastic viscosity
-                            double D = 1;
-                            etapl = ETA0(i, j) * syield / (ETA0(i, j) * V / D + syield);
+                            etapl = ETA0(i, j) * syield / (ETA0(i, j) * V + syield);
                             
                             //LDZ: save syield
                             SigmaY(i, j) = syield;
                             VSLIPB(i, j) = V;
                             SII_fault(i, j) = SIIB4;
-                            
-                            
-                            // Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
-                            double B = 1 / BETTASOLID;
 
                             // reduces calls on matrix
                             double g_temp = GGG(i, j); // reduces calls on matrix
                             double arsf_temp = ARSF(i, j);
                             double brsf_temp = BRSF(i, j);
                             double lrsf_temp = LRSF(i, j);
-
-                            double vi = (3 * B - 2 * g_temp) / (6 * B + 2 * g_temp);
+                            
+                            // "/ BETASOLID" -> Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
+                            double vi = (3 / BETASOLID - 2 * g_temp) / (6 / BETASOLID + 2 * g_temp);
                             double k = 2 / pi * g_temp / (1 - vi) / dx;
                             double xi = .25 * pow(k * lrsf_temp / arsf_temp / prB - (brsf_temp - arsf_temp) / arsf_temp, 2) - k * lrsf_temp / arsf_temp / prB;
                             if (xi < 0) {
@@ -1918,8 +1886,6 @@ int main() {
             if (ynpl == 0) {
                 ETA = ETA0;
             }
-            
-            double DSYERR = DSYLSQ(iterstep);
             
             // Adjust timestep
             double dtpl = dt;
@@ -2035,7 +2001,7 @@ int main() {
         }
              
         // /////////////////////////////////////////////////////////////////////////////////////// 
-        // end of loop through globel iterations
+        // end of loop through global iterations
         // /////////////////////////////////////////////////////////////////////////////////////// 
         
         // Mark dt decrease
@@ -2091,19 +2057,22 @@ int main() {
                 DSYY(i, j) = SYY(i, j) - SYY0(i, j);
         
                 // Compute stress and strain rate invariants and dissipation
+
+                double sky_ij = SXY(i, j), sky_i1j = SXY(i - 1, j), sky_ij1 = SXY(i, j - 1), sky_i1j1 = SXY(i - 1, j - 1);
+                double eta_ij_2 = 2 * ETA(i, j), eta_i1j_2 = 2 * ETA(i - 1, j), eta_ij1_2 = 2 * ETA(i, j - 1), eta_i1j1_2 = 2 * ETA(i - 1, j - 1);
             
                 // EXY term is averaged from four surrounding basic nodes
                 EXY2 = (pow(EXY(i, j), 2) + pow(EXY(i - 1, j), 2) + pow(EXY(i, j - 1), 2) + pow(EXY(i - 1, j - 1), 2)) / 4;
                 EII(i, j) = sqrt(pow(EXX(i, j), 2) + EXY2);
-                EXYVP2 = (pow(SXY(i, j) / (2 * ETA(i, j)), 2) + pow(SXY(i - 1, j) / (2 * ETA(i - 1, j)), 2) + pow(SXY(i, j - 1) / (2 * ETA(i, j - 1)), 2) + pow(SXY(i - 1, j - 1) / (2 * ETA(i - 1, j - 1)), 2)) / 4;
+                EXYVP2 = (pow(sky_ij / eta_ij_2, 2) + pow(sky_i1j / eta_i1j_2, 2) + pow(sky_ij1 / eta_ij1_2, 2) + pow(sky_i1j1 / eta_i1j1_2, 2)) / 4;
                 EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + EXYVP2);
                 // Second strain rate invariant SII
                 // SXY term is averaged from four surrounding basic nodes
-                SXY2 = (pow(SXY(i, j), 2) + pow(SXY(i - 1, j), 2) + pow(SXY(i, j - 1), 2) + pow(SXY(i - 1, j - 1), 2)) / 4;
+                SXY2 = (pow(sky_ij, 2) + pow(sky_i1j, 2) + pow(sky_ij1, 2) + pow(sky_i1j1, 2)) / 4;
                 SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + SXY2);
                 
                 // Dissipation
-                DISXY = (pow(SXY(i, j), 2) / (2 * ETA(i, j)) + pow(SXY(i - 1, j), 2) / (2 * ETA(i - 1, j)) + pow(SXY(i, j - 1), 2) / (2 * ETA(i, j - 1)) + pow(SXY(i - 1, j - 1), 2) / (2 * ETA(i - 1, j - 1))) / 4;
+                DISXY = (pow(sky_ij, 2) / eta_ij_2 + pow(sky_i1j, 2) /  eta_i1j_2 + pow(sky_ij1, 2) / eta_ij1_2 + pow(sky_i1j1, 2) / eta_i1j1_2) / 4;
                 DIS(i, j) = pow(SXX(i, j), 2) / (2 * ETAP(i, j)) + pow(SYY(i, j), 2) / (2 * ETAP(i, j)) + 2 * DISXY;
                 
                 
@@ -2122,10 +2091,10 @@ int main() {
                 // Compute elastic and viscous compaction
                 VIS_COMP(i, j) = (pt_ave(i, j) - pf_ave(i, j)) / (ETAB(i, j) * (1 - POR(i, j)));
                 // Drained compressibility
-                BETTADRAINED = (1 / GGGB(i, j) + BETTASOLID) / (1 - POR(i, j));
+                BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                 // Biott - Willis koefficient
-                KBW = 1 - BETTASOLID / BETTADRAINED;
-                EL_DECOM(i, j) = BETTADRAINED * (pt_ave(i, j) - PT0_ave - KBW * pf_ave(i, j) + KBW * PF0_ave) / dt;
+                KBW = 1 - BETASOLID / BETADRAINED;
+                EL_DECOM(i, j) = BETADRAINED * (pt_ave(i, j) - PT0_ave - KBW * pf_ave(i, j) + KBW * PF0_ave) / dt;
             }
         }
         
@@ -2278,9 +2247,6 @@ int main() {
         // Update timesum
         timesum = timesum + dt;
         timesumcur(timestep - 1) = timesum;
-        double timemyr = timesum / (1e+6 * 365.25 * 24 * 3600);
-        double timeyr = timesum / (365.25 * 24 * 3600);
-        double timehr = timesum / (3600);
         dtcur(timestep - 1) = dt;
         
         maxvxsmod(timestep - 1) = -1e+30;
