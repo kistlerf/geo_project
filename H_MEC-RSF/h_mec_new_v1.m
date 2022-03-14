@@ -47,7 +47,7 @@ fdata = fopen('file.txt', 'rt');
 timestep = fscanf(fdata, '%d', 1);
 fclose(fdata);
 
-num_timesteps = 10000; % set timestep limit
+num_timesteps = 10; % set timestep limit
 
 if(timestep  >  0)
     namemat = ['h_mec_',  num2str(timestep)];
@@ -71,10 +71,10 @@ else
     
     % (2) Define Numerical model
     % Eulerian basic grid
-    xsize = 40000.0;         % size in horizontal direction,  m
-    ysize = 10000.0;         % size in vertical direction,  m
-    Nx = 161;                % number of grid steps in horizontal directions
-    Ny = 41;                 % number of grid steps in vertical direction
+    xsize = 5000.0;         % size in horizontal direction,  m
+    ysize = 1250.0;         % size in vertical direction,  m
+    Nx = 21;                % number of grid steps in horizontal directions
+    Ny = 6;                 % number of grid steps in vertical direction
     % Eulerian Staggered Grid
     Nx1 = Nx + 1;              % Number of horizontal lines for staggered grid
     Ny1 = Ny + 1;              % Number of vertical lines for staggered grid
@@ -449,6 +449,8 @@ initialisation_time = toc(t_init);
 % start measuring iteration time
 t_iteration = tic;
 % """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+num_timesteps = 10;
 
 for timestep = timestep:1:num_timesteps
     
@@ -1476,6 +1478,7 @@ for timestep = timestep:1:num_timesteps
         % """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         % end measuring solve matrix time
         total_solve = total_solve+toc(t_solve);
+        fprintf('%d \n', total_solve);
         % """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         
         % """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -1903,7 +1906,10 @@ for timestep = timestep:1:num_timesteps
         % """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         
         % Compute Error
-        DSYLSQ(iterstep) = 0;if(ynpl > 0);DSYLSQ(iterstep) = (ddd / ynpl)^0.5;end
+        DSYLSQ(iterstep) = 0;
+        if(ynpl > 0);
+            DSYLSQ(iterstep) = (ddd / ynpl)^0.5;
+        end
         if(ynpl == 0)
             ETA = ETA0;
         end

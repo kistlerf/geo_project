@@ -44,12 +44,16 @@ to do:
 #include <string>
 #include <vector>
 #include <eigen3/Eigen/Eigen>
+#include <eigen3/Eigen/Sparse> // should be already included with the last include but somehow Euler needs this include too
 #include <random>
 #include <ctime>
 #include <math.h>
+#include <iomanip>
+#include <chrono>
 
 using namespace std;
 using namespace Eigen;
+using namespace std::chrono;
 
 // ====================================================================================
 // global variable declarations
@@ -69,10 +73,10 @@ const int Ny = 41;                // number of grid steps in vertical direction
 */
 
 // very tiny test system
-const double xsize = 10000.;      // size in horizontal direction, m
-const double ysize = 2500.;      // size in vertical direction, m
-const int Nx = 41;               // number of grid steps in horizontal directions
-const int Ny = 11;
+const double xsize = 5000.;      // size in horizontal direction, m
+const double ysize = 1250.;      // size in vertical direction, m
+const int Nx = 21;               // number of grid steps in horizontal directions
+const int Ny = 6;
 
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
@@ -378,7 +382,7 @@ MatrixXd VIS_COMP(Ny1, Nx1);
 // (3) Defining global matrixes
 // according to the global number of unknowns
 SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
-SparseVector<double> R(N); // Vector of the right parts of equations
+VectorXd R(N); // Vector of the right parts of equations
 VectorXd S(N);
 
 // variable type declaration
@@ -452,6 +456,15 @@ VectorXd minvysmod(num_timesteps);
 auto fix = [](double x) {
   return x < 0. ? (int)ceil(x) : (int)floor(x);
 };
+
+int check_bounds(int k, int bound) {
+    if (k < 0) {
+        k = 0;
+    } else if (k > bound - 2) {
+        k = bound - 2;
+    }
+    return k;
+}
 
 int main() {
     // ====================================================================================
@@ -761,16 +774,10 @@ int main() {
             // Indexes and distances
             double j = fix(xm(m) / dx);
             double i = fix(ym(m) / dy);
-            if (j < 0) {
-                j = 0;
-            } else if (j > Nx - 2) {
-                j = Nx - 2;
-            }
-            if (i < 0) {
-                i = 0;
-            } else if (i > Ny - 2) {
-                i = Ny - 2;
-            }
+
+            j = check_bounds(j, Nx);
+            i = check_bounds(i, Ny);
+            
             dxm = (xm(m) - x(j)) / dx;
             dym = (ym(m) - y(i)) / dy;
 
@@ -851,16 +858,9 @@ int main() {
             // Indexes and distances
             j = fix((xm(m) + dx / 2) / dx);
             i = fix((ym(m) + dy / 2) / dy);
-            if (j < 0) {
-                j = 0;
-            } else if (j > Nx - 2) {
-                j = Nx - 2;
-            }
-            if (i < 0) {
-                i = 0;
-            } else if (i > Ny - 2) {
-                i = Ny - 2;
-            }
+
+            j = check_bounds(j, Nx);
+            i = check_bounds(i, Ny);
             
             dxm = (xm(m) - xp(j)) / dx;
             dym = (ym(m) - yp(i)) / dy;
@@ -914,16 +914,10 @@ int main() {
             // Indexes and distances
             j = fix((xm(m)) / dx);
             i = fix((ym(m) + dy / 2) / dy);
-            if (j < 0) {
-                j = 0;
-            } else if (j > Nx - 2) {
-                j = Nx - 2;
-            }
-            if (i < 0) {
-                i = 0;
-            } else if (i > Ny - 2) {
-                i = Ny - 2;
-            }
+
+            j = check_bounds(j, Nx);
+            i = check_bounds(i, Ny);
+            
             dxm = (xm(m) - xvx(j)) / dx;
             dym = (ym(m) - yvx(i)) / dy;
             
@@ -968,16 +962,10 @@ int main() {
             // Indexes and distances
             j = fix((xm(m) + dx / 2) / dx);
             i = fix((ym(m)) / dy);
-            if (j < 0) {
-                j = 0;
-            } else if (j > Nx - 2) {
-                j = Nx - 2;
-            }
-            if (i < 0) {
-                i = 0;
-            } else if (i > Ny - 2) {
-                i = Ny - 2;
-            }
+
+            j = check_bounds(j, Nx);
+            i = check_bounds(i, Ny);
+        
             dxm = (xm(m) - xvy(j)) / dx;
             dym = (ym(m) - yvy(i)) / dy;
             
@@ -1015,30 +1003,34 @@ int main() {
             
         } // ends loop through markers
 
+        cout << "end markers " << timestep << endl;
+
         // Computing ETA and RHO
         for (int i = 0; i < Ny; i++) {
             // Basic nodes
             for (int j = 0; j < Nx; j++) {
-                if (WTSUM(i, j) > 0) {
-                    RHO(i, j) = RHOSUM(i, j) / WTSUM(i, j);
-                    KKK(i, j) = (KKKSUM(i, j) / WTSUM(i, j));
-                    TTT(i, j) = (TTTSUM(i, j) / WTSUM(i, j));
-                    GGG(i, j) = 1 / (GGGSUM(i, j) / WTSUM(i, j));
-                    ETA0(i, j) = ETA0SUM(i, j) / WTSUM(i, j);
-                    COHT(i, j) = (COHTSUM(i, j) / WTSUM(i, j));
-                    FRIT(i, j) = (FRITSUM(i, j) / WTSUM(i, j));
-                    COHC(i, j) = (COHCSUM(i, j) / WTSUM(i, j));
-                    FRIC(i, j) = (FRICSUM(i, j) / WTSUM(i, j));
-                    DILC(i, j) = (DILCSUM(i, j) / WTSUM(i, j));
+                double wtsum = WTSUM(i, j);
+                if (wtsum > 0) {
+                    RHO(i, j) = RHOSUM(i, j) /wtsum;
+                    KKK(i, j) = (KKKSUM(i, j) / wtsum);
+                    TTT(i, j) = (TTTSUM(i, j) / wtsum);
+                    GGG(i, j) = 1 / (GGGSUM(i, j) / wtsum);
+                    ETA0(i, j) = ETA0SUM(i, j) / wtsum;
+                    COHT(i, j) = (COHTSUM(i, j) / wtsum);
+                    FRIT(i, j) = (FRITSUM(i, j) / wtsum);
+                    COHC(i, j) = (COHCSUM(i, j) / wtsum);
+                    FRIC(i, j) = (FRICSUM(i, j) / wtsum);
+                    DILC(i, j) = (DILCSUM(i, j) / wtsum);
                 }
             }
             // Vy nodes
             for (int j = 0; j < Nx1; j++) {
-                if (WTYSUM(i, j) > 0) {
-                    RHOY(i, j) = RHOYSUM(i, j) / WTYSUM(i, j);
-                    ETADY(i, j) = 1 / (ETADYSUM(i, j) / WTYSUM(i, j));
-                    RHOFY(i, j) = RHOFYSUM(i, j) / WTYSUM(i, j);
-                    PORY(i, j) = PORYSUM(i, j) / WTYSUM(i, j);
+                double wtysum = WTYSUM(i, j);
+                if (wtysum > 0) {
+                    RHOY(i, j) = RHOYSUM(i, j) / wtysum;
+                    ETADY(i, j) = 1 / (ETADYSUM(i, j) / wtysum);
+                    RHOFY(i, j) = RHOFYSUM(i, j) / wtysum;
+                    PORY(i, j) = PORYSUM(i, j) / wtysum;
                 }
             }
         }
@@ -1046,21 +1038,23 @@ int main() {
         for (int i = 0; i < Ny1; i++) {
             // Vx nodes
             for (int j = 0; j < Nx; j++) {
-                if (WTXSUM(i, j) > 0){
-                    RHOX(i, j) = RHOXSUM(i, j) / WTXSUM(i, j);
-                    ETADX(i, j) = 1 / (ETADXSUM(i, j) / WTXSUM(i, j));
-                    RHOFX(i, j) = RHOFXSUM(i, j) / WTXSUM(i, j);
-                    PORX(i, j) = PORXSUM(i, j) / WTXSUM(i, j);
+                double wtxsum = WTXSUM(i, j);
+                if (wtxsum > 0) {
+                    RHOX(i, j) = RHOXSUM(i, j) / wtxsum;
+                    ETADX(i, j) = 1 / (ETADXSUM(i, j) / wtxsum);
+                    RHOFX(i, j) = RHOFXSUM(i, j) / wtxsum;
+                    PORX(i, j) = PORXSUM(i, j) / wtxsum;
                 }
             }
             //Pressure nodes
             for (int j = 0; j < Nx1; j++) {
-                if (WTPSUM(i, j) > 0) {
-                    ETAP(i, j) = ETAPSUM(i, j) / WTPSUM(i, j);
-                    POR(i, j) = PORSUM(i, j) / WTPSUM(i, j);
-                    ETAB0(i, j) = ETAB0SUM(i, j) / WTPSUM(i, j) / POR(i, j);
-                    ETAP0(i, j) = ETAP0SUM(i, j) / WTPSUM(i, j);
-                    GGGP(i, j) = 1 / (GGGPSUM(i, j) / WTPSUM(i, j));
+                double wtpsum = WTPSUM(i, j);
+                if (wtpsum > 0) {
+                    ETAP(i, j) = ETAPSUM(i, j) / wtpsum;
+                    POR(i, j) = PORSUM(i, j) / wtpsum;
+                    ETAB0(i, j) = ETAB0SUM(i, j) / wtpsum / POR(i, j);
+                    ETAP0(i, j) = ETAP0SUM(i, j) / wtpsum;
+                    GGGP(i, j) = 1 / (GGGPSUM(i, j) / wtpsum);
                 }
             }
         }
@@ -1090,6 +1084,8 @@ int main() {
         dt00 = dt;
         DSYLSQ.setZero();
         ynlast = 0;
+
+        cout << "start global iterations " << timestep << endl;
         
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
             
@@ -1182,7 +1178,7 @@ int main() {
                         // Ghost nodes: 1 * vxs = 0
                         if (j == Nx) {
                             L.coeffRef(kx, kx) = 1;
-                            R.coeffRef(kx) = 0;
+                            R(kx) = 0;
                         }
                         
                         // Upper boundary
@@ -1190,7 +1186,7 @@ int main() {
                         if (i == 0 && j < Nx) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx + 6) = 1;
-                            R.coeffRef(kx) = 2 * bcupper;
+                            R(kx) = 2 * bcupper;
                         }
                         
                         // Lower boundary
@@ -1198,21 +1194,21 @@ int main() {
                         if (i == Ny && j < Nx) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx - 6) = 1;
-                            R.coeffRef(kx) = 2 * bclower;
+                            R(kx) = 2 * bclower;
                         }
                         
                         // Left boundary:
                         if (j == 0 && i > 0 && i < Ny) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx + 6 * Ny1) = -1;
-                            R.coeffRef(kx) = 0;
+                            R(kx) = 0;
                         }
                         
                         // Right boundary
                         if (j == Nx - 1 && i > 0 && i < Ny) {
                             L.coeffRef(kx, kx) = 1;
                             L.coeffRef(kx, kx - 6 * Ny1) = -1;
-                            R.coeffRef(kx) = 0;
+                            R(kx) = 0;
                         }
                         
                     } else {
@@ -1241,10 +1237,10 @@ int main() {
                         KXX1 = dt * GXX1 / (dt * GXX1 + ETAXX1);
                         KXX2 = dt * GXX2 / (dt * GXX2 + ETAXX2);
                         // Numerical viscosity
-                        ETAXY1 = ETAXY1 * KXY1;
-                        ETAXY2 = ETAXY2 * KXY2;
-                        ETAXX1 = ETAXX1 * KXX1;
-                        ETAXX2 = ETAXX2 * KXX2;
+                        ETAXY1 *= KXY1;
+                        ETAXY2 *= KXY2;
+                        ETAXX1 *= KXX1;
+                        ETAXX2 *= KXX2;
                         // Numerical stresses
                         SXY1 = SXY0(i - 1, j) * (1 - KXY1);
                         SXY2 = SXY0(i, j) * (1 - KXY2);
@@ -1266,7 +1262,7 @@ int main() {
                         L.coeffRef(kx, kp) = ptscale / dx; //Pt1'
                         L.coeffRef(kx, kp + Ny1 * 6) = -ptscale / dx; //Pt2'
                         // Right part
-                        R.coeffRef(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
+                        R(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
                     
                     // 5b) Composing equation for vys
@@ -1274,7 +1270,7 @@ int main() {
                         // Ghost nodes: 1 * vys = 0
                         if (i == Ny) {
                             L.coeffRef(ky, ky) = 1;
-                            R.coeffRef(ky) = 0;
+                            R(ky) = 0;
                         }
                         
                         // Left boundary
@@ -1282,7 +1278,7 @@ int main() {
                         if (j == 0) {
                             L.coeffRef(ky, ky) = 1;
                             L.coeffRef(ky, ky + Ny1 * 6) = 1;
-                            R.coeffRef(ky) = 0;
+                            R(ky) = 0;
                         }
                         
                         // Right boundary
@@ -1290,19 +1286,19 @@ int main() {
                         if (j == Nx) {
                             L.coeffRef(ky, ky) = 1;
                             L.coeffRef(ky, ky - Ny1 * 6) = 1;
-                            R.coeffRef(ky) = 0;
+                            R(ky) = 0;
                         }
                         
                         // Upper boundary: no penetration
                         if (i == 0 && j > 0 && j < Nx) {
                             L.coeffRef(ky, ky) = 1;
-                            R.coeffRef(ky) = 0;
+                            R(ky) = 0;
                         }
                         
                         // Lower boundary: no penetration
                         if (i == Ny - 1 && j > 0 && j < Nx) {
                             L.coeffRef(ky, ky) = 1;
-                            R.coeffRef(ky) = 0;
+                            R(ky) = 0;
                         }
                         
                     } else {
@@ -1334,10 +1330,10 @@ int main() {
                         KYY1 = dt * GYY1 / (dt * GYY1 + ETAYY1);
                         KYY2 = dt * GYY2 / (dt * GYY2 + ETAYY2);
                         // Numerical viscosity
-                        ETAXY1 = ETAXY1 * KXY1;
-                        ETAXY2 = ETAXY2 * KXY2;
-                        ETAYY1 = ETAYY1 * KYY1;
-                        ETAYY2 = ETAYY2 * KYY2;
+                        ETAXY1 *= KXY1;
+                        ETAXY2 *= KXY2;
+                        ETAYY1 *= KYY1;
+                        ETAYY2 *= KYY2;
                         // Numerical stresses
                         SXY1 = SXY0(i, j - 1) * (1 - KXY1);
                         SXY2 = SXY0(i, j) * (1 - KXY2);
@@ -1359,14 +1355,14 @@ int main() {
                         L.coeffRef(ky, kp) = ptscale / dy; //Pt1'
                         L.coeffRef(ky, kp + 6) = -ptscale / dy; //Pt2'
                         // Right part
-                        R.coeffRef(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
+                        R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
                     
                     // 5c) Composing equation for Pt
                     if (i == 0 || j == 0 || i == Ny || j == Nx) { // || (i == 2 && j == 2))
                         // BC equation: 1 * Pt = 0
                         L.coeffRef(kp, kp) = 1;
-                        R.coeffRef(kp) = 0;
+                        R(kp) = 0;
                     } else {
                         // Solid Continuity: dVxs / dx + dVys / dy + (Pt - Pf) / ETAbulk = 0
                         //              vys1
@@ -1386,7 +1382,7 @@ int main() {
                         L.coeffRef(kp, kp) = ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt); //Pt
                         L.coeffRef(kp, kpf) = -pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt); //Pf
                         // Right part
-                        R.coeffRef(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
+                        R(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
                     }
                     
                     // 5d) Composing equation for vxD
@@ -1394,35 +1390,35 @@ int main() {
                         // Ghost nodes: 1 * vxs = 0
                         if (j == Nx) {
                             L.coeffRef(kxf, kxf) = 1;
-                            R.coeffRef(kxf) = 0;
+                            R(kxf) = 0;
                         }
                         
                         // Upper boundary: symmetry
                         if (i == 0 && j < Nx) {
                             L.coeffRef(kxf, kxf) = 1;
                             L.coeffRef(kxf, kxf + 6) = -1;
-                            R.coeffRef(kxf) = 0;
+                            R(kxf) = 0;
                         }
                         
                         // Lower boundary: symmetry
                         if (i == Ny && j < Nx) {
                             L.coeffRef(kxf, kxf) = 1;
                             L.coeffRef(kxf, kxf - 6) = -1;
-                            R.coeffRef(kxf) = 0;
+                            R(kxf) = 0;
                         }
                         
                         // Left boundary
                         // no penetration
                         if (j == 0) {
                             L.coeffRef(kxf, kxf) = 1;
-                            R.coeffRef(kxf) = 0; //bcvxfleft;
+                            R(kxf) = 0; //bcvxfleft;
                         }
                         
                         // Right boundary
                         // no penetration
                         if (j == Nx - 1) {
                             L.coeffRef(kxf, kxf) = 1;
-                            R.coeffRef(kxf) = 0;
+                            R(kxf) = 0;
                         }
                         
                     } else {
@@ -1436,7 +1432,7 @@ int main() {
                         L.coeffRef(kxf, kpf) = pfscale / dx; //Pf1'
                         L.coeffRef(kxf, kpf + Ny1 * 6) = -pfscale / dx; //Pf2'
                         // Right part
-                        R.coeffRef(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
+                        R(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
                     }
                     
                     // 5e) Composing equation for vyD
@@ -1444,7 +1440,7 @@ int main() {
                         // Ghost nodes: 1 * vxs = 0
                         if (i == Ny) {
                             L.coeffRef(kyf, kyf) = 1;
-                            R.coeffRef(kyf) = 0;
+                            R(kyf) = 0;
                         }
                         
                         // Left boundary
@@ -1452,7 +1448,7 @@ int main() {
                         if (j == 0 && i > 0 && i < Ny - 1) {
                             L.coeffRef(kyf, kyf) = 1;
                             L.coeffRef(kyf, kyf + Ny1 * 6) = -1;
-                            R.coeffRef(kyf) = 0;
+                            R(kyf) = 0;
                         }
                         
                         // Right boundary
@@ -1460,19 +1456,19 @@ int main() {
                         if (j == Nx && i > 0 && i < Ny - 1) {
                             L.coeffRef(kyf, kyf) = 1;
                             L.coeffRef(kyf, kyf - Ny1 * 6) = -1;
-                            R.coeffRef(kyf) = 0;
+                            R(kyf) = 0;
                         }
                         
                         // Upper boundary: no penetration
                         if (i == 0) {
                             L.coeffRef(kyf, kyf) = 1;
-                            R.coeffRef(kyf) = bcvyflower;
+                            R(kyf) = bcvyflower;
                         }
                         
                         // Lower boundary: no penetration
                         if (i == Ny - 1) {
                             L.coeffRef(kyf, kyf) = 1;
-                            R.coeffRef(kyf) = bcvyflower;
+                            R(kyf) = bcvyflower;
                         }
                     } else {
                         // Fluid Y - Darsi:  - ETAfluid / K * VyD - dPf / dy = -RHOf * gy + RHOf * DVys / Dt
@@ -1489,7 +1485,7 @@ int main() {
                         L.coeffRef(kyf, kpf) = pfscale / dy; //Pf1'
                         L.coeffRef(kyf, kpf + 6) = -pfscale / dy; //Pf2'
                         // Right part
-                        R.coeffRef(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
+                        R(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
                     }
                     
                     
@@ -1497,20 +1493,20 @@ int main() {
                     if (j == 0 || j == Nx || i <= 1 || i >= Ny - 1) {
                         // BC equation: 1 * Pf = 0
                         L.coeffRef(kpf, kpf) = 1;
-                        R.coeffRef(kpf) = 0;
+                        R(kpf) = 0;
                         
                         // Real BC
                         if (i == 1) {
                             L.coeffRef(kpf, kpf) = 1 * pfscale;
                             L.coeffRef(kpf, kp) = -1 * ptscale;
-                            R.coeffRef(kpf) = -PTFDIFF;
+                            R(kpf) = -PTFDIFF;
                         }
                         
                         // Real BC
                         if (i == Ny - 1) {
                             L.coeffRef(kpf, kpf) = 1 * pfscale;
                             L.coeffRef(kpf, kp) = -1 * ptscale;
-                            R.coeffRef(kpf) = -PTFDIFF;
+                            R(kpf) = -PTFDIFF;
                         }
                         
                     } else {
@@ -1535,19 +1531,25 @@ int main() {
                         L.coeffRef(kpf, kp) = -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt); //Pt
                         L.coeffRef(kpf, kpf) = pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt); //Pf
                         // Right part
-                        R.coeffRef(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
+                        R(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
                 }
             }
 
             cout << "test " << timestep << " start solving LSE" << endl; // testtesttest
             
+            auto start = high_resolution_clock::now();
+
             // 6) Solving matrix
             SparseQR<SparseMatrix<double>, COLAMDOrdering<int>> solver;
             L.makeCompressed();
             solver.analyzePattern(L);
             solver.factorize(L);
             S = solver.solve(R); // This line causes about 60% of all computational cost
+
+            auto stop = high_resolution_clock::now();
+            auto duration = duration_cast<seconds>(stop - start);
+            cout << duration.count() << endl;
 
             cout << "LSE success" << endl;
             
@@ -1572,6 +1574,8 @@ int main() {
                     vyD(i, j) = S(kyf);
                 }
             }
+
+            cout << "test 0" << endl;
             
             Vmax = VSLIPB.maxCoeff();
             
@@ -1620,6 +1624,8 @@ int main() {
                     DSXY(i, j) = SXY(i, j) - SXY0(i, j);
                 }
             }
+
+            cout << "test 1" << endl;
             
             // Process pressure cells
             for (int i = 1; i < Ny; i++) {
@@ -1684,24 +1690,31 @@ int main() {
             GGGB.col(Nx) = GGGB.col(Nx - 1);
             GGGB.row(0) = GGGB.row(1);
             GGGB.row(Ny) = GGGB.row(Ny - 1);
+
+            cout << "test 2" << endl;
             
             // Compute stress and strain rate invariants and dissipation
             // Process pressure cells
             for (int i = 1; i < Ny; i++) {
                 for (int j = 1; j < Nx; j++) {
+                    double sky_ij = SXY(i, j), sky_i1j = SXY(i - 1, j), sky_ij1 = SXY(i, j - 1), sky_i1j1 = SXY(i - 1, j - 1);
+                    double eta_ij_2 = 2 * ETA(i, j), eta_i1j_2 = 2 * ETA(i - 1, j), eta_ij1_2 = 2 * ETA(i, j - 1), eta_i1j1_2 = 2 * ETA(i - 1, j - 1);
+                    double sxx_ij = SXX(i, j), syy_ij = SYY(i, j);
+                    double etap_2 = ETAP(i, j);
+
                     // EXY term is averaged from four surrounding basic nodes
                     EXY2 = (pow(EXY(i, j), 2) + pow(EXY(i - 1, j), 2) + pow(EXY(i, j - 1), 2) + pow(EXY(i - 1, j - 1), 2)) / 4;
                     EII(i, j) = sqrt(0.5 * (pow(EXX(i, j), 2) + pow(EYY(i, j), 2)) + EXY2);
-                    EXYVP2 = (pow(SXY(i, j) / 2 / ETA(i, j), 2) + pow(SXY(i - 1, j) / 2 / ETA(i - 1, j), 2) + pow(SXY(i, j - 1) / 2 / ETA(i, j - 1), 2) + pow(SXY(i - 1, j - 1) / 2 / ETA(i - 1, j - 1), 2)) / 4;
-                    EIIVP(i, j) = sqrt(0.5 * (pow(SXX(i, j) / 2 / ETAP(i, j), 2) + pow(SYY(i, j) / 2 / ETAP(i, j), 2)) + EXYVP2);
+                    EXYVP2 = (pow(sky_ij / eta_ij_2, 2) + pow(sky_i1j / eta_i1j_2, 2) + pow(sky_ij1 / eta_ij1_2, 2) + pow(sky_i1j1 / eta_i1j1_2, 2)) / 4;
+                    EIIVP(i, j) = sqrt(0.5 * (pow(sxx_ij / etap_2, 2) + pow(syy_ij / etap_2, 2)) + EXYVP2);
                     // Second strain rate invariant SII
                     // SXY term is averaged from four surrounding basic nodes
-                    SXY2 = (pow(SXY(i, j), 2) + pow(SXY(i - 1, j), 2) + pow(SXY(i, j - 1), 2) + pow(SXY(i - 1, j - 1), 2)) / 4;
-                    SII(i, j) = sqrt(0.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + SXY2);
+                    SXY2 = (pow(sky_ij, 2) + pow(sky_i1j, 2) + pow(sky_ij1, 2) + pow(sky_i1j1, 2)) / 4;
+                    SII(i, j) = sqrt(0.5 * (pow(sxx_ij, 2) + pow(syy_ij, 2)) + SXY2);
                     
                     // Dissipation
-                    DISXY = (pow(SXY(i, j), 2) / 2 / ETA(i, j) + pow(SXY(i - 1, j), 2) / 2 / ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / 2 / ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / 2 / ETA(i - 1, j - 1)) / 4;
-                    DIS(i, j) = pow(SXX(i, j), 2) / 2 / ETAP(i, j) + pow(SYY(i, j), 2) / 2 / ETAP(i, j) + 2 * DISXY;
+                    DISXY = (pow(sky_ij, 2) / eta_ij_2 + pow(sky_i1j, 2) / eta_i1j_2 + pow(sky_ij1, 2) / eta_ij1_2 + pow(sky_i1j1, 2) / eta_i1j1_2) / 4;
+                    DIS(i, j) = pow(sxx_ij, 2) / etap_2 + pow(syy_ij, 2) / etap_2 + 2 * DISXY;
                 }
             }
                         
@@ -1718,6 +1731,8 @@ int main() {
             double ddd = 0;
             dtlapusta = 1e7;
             OM5 = OM;
+
+            cout << "test 3" << endl;
             
             // Power law plasticity model Yi et al., 2018
             // Journal of Offshore Mechanics and Arctic Engineering
@@ -1726,15 +1741,25 @@ int main() {
                 for (int i = 0; i < Ny; i++) {
                     if (y(i)  >= upper_block && y(i)  <= lower_block) {
                         for (int j = 0; j < Nx; j++) {
+                            // reducing matrix calls
+                            double arsf_temp = ARSF(i, j);
+                            double brsf_temp = BRSF(i, j);
+                            double lrsf_temp = LRSF(i, j);
+                            double fric_temp = FRIC(i, j);
+                            double eta0_temp = ETA0(i, j);
+
+                            double sxx_temp_sum = SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1);
+                            double syy_temp_sum = SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1);
+
                             // SXX, pt are averaged from four surrounding pressure nodes
-                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow((SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1)) / 4, 2) + .5 * pow((SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1)) / 4, 2) + .5 * pow((-SXX(i, j) - SYY(i, j) - SXX(i + 1, j) - SYY(i + 1, j) - SXX(i, j + 1) - SYY(i, j + 1) - SXX(i + 1, j + 1) - SYY(i + 1, j + 1)) / 4, 2));
+                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow(sxx_temp_sum / 4, 2) + .5 * pow(syy_temp_sum / 4, 2) + .5 * pow((-sxx_temp_sum - syy_temp_sum) / 4, 2)); // - can be changed to + as term is squared
                             ptB = (pt(i, j) + pt(i + 1, j) + pt(i, j + 1) + pt(i + 1, j + 1)) / 4.;
                             pfB = (pf(i, j) + pf(i + 1, j) + pf(i, j + 1) + pf(i + 1, j + 1)) / 4.;
                             // Computing "elastic" stress invariant
                             kfxy = ETA(i, j) / (GGG(i, j) * dt + ETA(i, j));
                             siiel = SIIB(i, j) / kfxy;
                             // Compute maximal stress invariant with viscous viscosity
-                            kfxy0 = ETA0(i, j) / (GGG(i, j) * dt + ETA0(i, j));
+                            kfxy0 = eta0_temp / (GGG(i, j) * dt + eta0_temp);
                             SIIB0 = siiel * kfxy0;
                             
                             // Assign PEFFB
@@ -1752,27 +1777,26 @@ int main() {
                             SIIB1 = SIIB(i, j);
                             
                             //Compute slip velocity for current stress invariant and state
-                            V = 2 * V0 * sinh(max(SIIB1, 0.) / ARSF(i, j) / prB) * exp(-(BRSF(i, j) * OM(i, j) + FRIC(i, j)) / ARSF(i, j));
+                            V = 2 * V0 * sinh(max(SIIB1, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
                             
                             EIISLIP = V / dx / 2;
                             
                             // Compute new ETAVP
                             ETAPL = SIIB1 / 2 / EIISLIP;
-                            ETAVP = 1 / (1 / ETA0(i, j) + 1 / ETAPL);
+                            ETAVP = 1 / (1 / eta0_temp + 1 / ETAPL);
                             // Compute new stress invariant
                             kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
                             SIIB2 = siiel * kfxy1;
                             DSIIB1 = SIIB2 - SIIB1;
                             
-                            
                             //Compute slip velocity for current stress invariant and state
-                            V = 2 * V0 * sinh(max(SIIB2, 0.) / ARSF(i, j) / prB) * exp(-(BRSF(i, j) * OM(i, j) + FRIC(i, j)) / ARSF(i, j));
+                            V = 2 * V0 * sinh(max(SIIB2, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
                             
                             EIISLIP = V / dx / 2;
                             
                             // Compute new ETAVP
                             ETAPL = SIIB2 / 2 / EIISLIP;
-                            ETAVP = 1 / (1 / ETA0(i, j) + 1 / ETAPL);
+                            ETAVP = 1 / (1 / eta0_temp + 1 / ETAPL);
                             // Compute new stress invariant
                             kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
                             SIIB3 = siiel * kfxy1;
@@ -1785,13 +1809,13 @@ int main() {
                                     SIIB4 = (SIIB1 + SIIB2) / 2;
                                     
                                     //Compute slip velocity for current stress invariant and state
-                                    V = 2 * V0 * sinh(max((SIIB4), 0.) / ARSF(i, j) / prB) * exp( - (BRSF(i, j) * OM(i, j) + FRIC(i, j)) / ARSF(i, j));
+                                    V = 2 * V0 * sinh(max((SIIB4), 0.) / arsf_temp / prB) * exp( - (brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
                                     
                                     EIISLIP = V / dx / 2;
                                     
                                     // Compute new ETAVP
                                     ETAPL = SIIB4 / 2 / EIISLIP;
-                                    ETAVP = 1 / (1 / ETA0(i, j) + 1 / ETAPL);
+                                    ETAVP = 1 / (1 / eta0_temp + 1 / ETAPL);
                                     // Compute new stress invariant
                                     kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
                                     SIIB5 = siiel * kfxy1;
@@ -1804,10 +1828,10 @@ int main() {
                                 }
                             }
                             
-                            if (V * dt / LRSF(i, j) > 1e-6) {
-                                OM5(i, j) = log(V0 / V + (exp(OM0(i, j)) - V0 / V) * exp( - V * dt / LRSF(i, j)));
+                            if (V * dt / lrsf_temp > 1e-6) {
+                                OM5(i, j) = log(V0 / V + (exp(OM0(i, j)) - V0 / V) * exp( - V * dt / lrsf_temp));
                             } else {
-                                OM5(i, j) = log(exp(OM0(i, j)) * (1 - V * dt / LRSF(i, j)) + V0 * dt / LRSF(i, j));
+                                OM5(i, j) = log(exp(OM0(i, j)) * (1 - V * dt / lrsf_temp) + V0 * dt / lrsf_temp);
                             }
                             
                             
@@ -1815,10 +1839,10 @@ int main() {
                             SIGMA2 = siiel * kfxy1;
                             
                             // Compute yielding stress
-                            syield = max(syieldmin, (ptB - pfB) * ARSF(i, j) * asinh(V / 2 / V0 * exp((BRSF(i, j) * OM5(i, j) + FRIC(i, j)) / ARSF(i, j))));
+                            syield = max(syieldmin, (ptB - pfB) * arsf_temp * asinh(V / 2 / V0 * exp((brsf_temp * OM5(i, j) + fric_temp) / arsf_temp)));
                             
                             // Compute visco - plastic viscosity
-                            etapl = ETA0(i, j) * syield / (ETA0(i, j) * V + syield);
+                            etapl = eta0_temp * syield / (eta0_temp * V + syield);
                             
                             //LDZ: save syield
                             SigmaY(i, j) = syield;
@@ -1826,14 +1850,11 @@ int main() {
                             SII_fault(i, j) = SIIB4;
 
                             // reduces calls on matrix
-                            double g_temp = GGG(i, j); // reduces calls on matrix
-                            double arsf_temp = ARSF(i, j);
-                            double brsf_temp = BRSF(i, j);
-                            double lrsf_temp = LRSF(i, j);
+                            double g_temp = 2 * GGG(i, j); // reduces calls on matrix
                             
                             // "/ BETASOLID" -> Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
-                            double vi = (3 / BETASOLID - 2 * g_temp) / (6 / BETASOLID + 2 * g_temp);
-                            double k = 2 / pi * g_temp / (1 - vi) / dx;
+                            double vi = (3 / BETASOLID - g_temp) / (6 / BETASOLID + g_temp);
+                            double k = g_temp / (pi * (1 - vi) * dx);
                             double xi = .25 * pow(k * lrsf_temp / arsf_temp / prB - (brsf_temp - arsf_temp) / arsf_temp, 2) - k * lrsf_temp / arsf_temp / prB;
                             if (xi < 0) {
                                 dTETAmax = min(1. - (brsf_temp - arsf_temp) * prB / (k * lrsf_temp), .2);
@@ -1857,7 +1878,7 @@ int main() {
                             if (A < 1) {
                                 // New viscosity for the basic node
                                 etapl = dt * GGG(i, j) * A / (1 - A);
-                                if (etapl < ETA0(i, j)) {
+                                if (etapl < eta0_temp) {
                                     // Update plastic nodes
                                     ETA5(i, j) = pow(etapl, 1 - etawt) * pow(ETA(i, j), etawt);
                                     YNY(i, j) = 1;
@@ -1868,16 +1889,18 @@ int main() {
                                         ynpl++;
                                     }
                                 } else {
-                                    ETA5(i, j) = ETA0(i, j);
+                                    ETA5(i, j) = eta0_temp;
                                 }
                             } else {
-                                ETA5(i, j) = ETA0(i, j);
+                                ETA5(i, j) = eta0_temp;
                             }
                         }
                     }
                 }
             }
             
+            cout << "test 4" << endl;
+
             // Compute Error
             DSYLSQ(iterstep) = 0;
             if (ynpl > 0) {
@@ -1886,6 +1909,15 @@ int main() {
             if (ynpl == 0) {
                 ETA = ETA0;
             }
+
+            // connot calculate DSYLSQ(iterstep -1) if iterstep = 0
+            // need to know what to do when iterstep = 0 ???
+            double D_iter = DSYLSQ(iterstep);
+            double D_iter_quot = 0;
+            if (iterstep != 0) {
+                D_iter_quot = D_iter / DSYLSQ(iterstep - 1);
+            }
+            
             
             // Adjust timestep
             double dtpl = dt;
@@ -1893,7 +1925,7 @@ int main() {
             //     dtpl = dt / dtkoef
             //     yn = true;
             // end
-            if (ynpl > 0 && iterstep < niterglobal && ynlast >= dtstep && (ynlast > ynlastmax || log10(DSYLSQ(iterstep) / DSYLSQ(iterstep - 1)) >= 0 || log10(DSYLSQ(iterstep) / DSYLSQ(iterstep - 1)) > log10(errmin / DSYLSQ(iterstep)) / (ynlastmax - ynlast))) {
+            if (ynpl > 0 && iterstep < niterglobal && ynlast >= dtstep && (ynlast > ynlastmax || log10(D_iter_quot) >= 0 || log10(D_iter_quot) > log10(errmin / D_iter) / (ynlastmax - ynlast))) {
                 dtpl = dt / dtkoef;
                 yn = true;
             }
@@ -1919,6 +1951,8 @@ int main() {
             }
             maxvxs = 0;
             maxvys = 0;
+
+            cout << "test 5" << endl;
 
             for (int i = 0; i < Ny1; i++) {
                     for (int j = 0; j < Nx1; j++) {
@@ -1966,6 +2000,8 @@ int main() {
             } else {
                 yn = false;
             }
+
+            cout << "test 6" << endl;
             
             // Exit iterations
             bool ynstop = false;
@@ -1999,7 +2035,9 @@ int main() {
 
             ynlast++;
         }
-             
+
+        cout << "end global iterations " << timestep << endl;
+
         // /////////////////////////////////////////////////////////////////////////////////////// 
         // end of loop through global iterations
         // /////////////////////////////////////////////////////////////////////////////////////// 
@@ -2031,6 +2069,8 @@ int main() {
         SII.setZero();
         DSII.setZero();
         DIS.setZero();
+
+        cout << "test 1 " << timestep << endl;
         
         // Process internal basic nodes
         for (int i = 0; i < Ny; i++) {
@@ -2043,6 +2083,8 @@ int main() {
                 DSXY(i, j) = SXY(i, j) - SXY0(i, j);
             }
         }
+
+        cout << "test 2 " << timestep << endl;
         
         // Process pressure cells
         for (int i = 1; i < Ny; i++) {
@@ -2097,7 +2139,8 @@ int main() {
                 EL_DECOM(i, j) = BETADRAINED * (pt_ave(i, j) - PT0_ave - KBW * pf_ave(i, j) + KBW * PF0_ave) / dt;
             }
         }
-        
+
+        cout << "test 3 " << timestep << endl;
         
         // Runge-Kutta velocity, spin array
         vxm.setZero();
@@ -2119,16 +2162,10 @@ int main() {
                 // Indexes and distances
                 int j = fix(xm(m) / dx);
                 int i = fix((ym(m) + dy / 2) / dy);
-                if (j < 1) {
-                    j = 1;
-                } else if (j > Nx - 1) {
-                    j = Nx - 1;
-                }
-                if (i < 1) {
-                    i = 1;
-                } else if (i > Ny) {
-                    i = Ny;
-                }
+                
+                j = check_bounds(j, Nx);
+                i = check_bounds(i, Ny);
+
                 //Distances
                 dxm = (xm(m) - xvx(j)) / dx;
                 dym = (ym(m) - yvx(i)) / dy;
@@ -2149,16 +2186,10 @@ int main() {
                 // Indexes and distances
                 j = fix((xm(m) + dx / 2) / dx);
                 i = fix(ym(m) / dy);
-                if (j < 1) {
-                    j = 1;
-                } else if (j > Nx) {
-                    j = Nx;
-                }
-                if (i < 1) {
-                    i = 1;
-                } else if (i > Ny - 1) {
-                    i = Ny - 1;
-                }
+
+                j = check_bounds(j, Nx);
+                i = check_bounds(i, Ny);
+
                 //Distances
                 dxm = (xm(m) - xvy(j)) / dx;
                 dym = (ym(m) - yvy(i)) / dy;
@@ -2180,16 +2211,9 @@ int main() {
                 // Indexes and distances
                 j = fix((xm(m)) / dx);
                 i = fix((ym(m)) / dy);
-                if (j < 1) {
-                    j = 1;
-                } else if (j > Nx - 1) {
-                    j = Nx - 1;
-                }
-                if (i < 1) {
-                    i = 1;
-                } else if (i > Ny - 1) {
-                    i = Ny - 1;
-                }
+
+                j = check_bounds(j, Nx);
+                i = check_bounds(i, Ny);
                 
                 //Distances
                 dxm = (xm(m) - x(j)) / dx;
@@ -2243,23 +2267,25 @@ int main() {
                 xm(m) = xm(m) - xsize;
             }
         }
+
+        int t_minus1 = timestep - 1;
         
         // Update timesum
         timesum = timesum + dt;
-        timesumcur(timestep - 1) = timesum;
-        dtcur(timestep - 1) = dt;
+        timesumcur(t_minus1) = timesum;
+        dtcur(t_minus1) = dt;
         
-        maxvxsmod(timestep - 1) = -1e+30;
-        minvxsmod(timestep - 1) = 1e+30;
-        maxvysmod(timestep - 1) = -1e+30;
-        minvysmod(timestep - 1) = 1e+30; 
+        maxvxsmod(t_minus1) = -1e+30;
+        minvxsmod(t_minus1) = 1e+30;
+        maxvysmod(t_minus1) = -1e+30;
+        minvysmod(t_minus1) = 1e+30; 
         
         // Vx
         for (int i = 1; i < Ny; i++) {
             for (int j = 0; j < Nx1; j++) {
                 if (RHOX(i, j) > 2000) {
-                    maxvxsmod(timestep - 1) = max(maxvxsmod(timestep - 1), vxs(i, j));
-                    minvxsmod(timestep - 1) = min(minvxsmod(timestep - 1), vxs(i, j));
+                    maxvxsmod(t_minus1) = max(maxvxsmod(t_minus1), vxs(i, j));
+                    minvxsmod(t_minus1) = min(minvxsmod(t_minus1), vxs(i, j));
                 }
             }
         }
@@ -2270,8 +2296,8 @@ int main() {
             // Vy
             for (int j = 1; j < Nx; j++) {
                 if (RHOY(i, j) > 2000) {
-                    maxvysmod(timestep - 1) = max(maxvysmod(timestep - 1), vys(i, j));
-                    minvysmod(timestep - 1) = min(minvysmod(timestep - 1), vys(i, j));
+                    maxvysmod(t_minus1) = max(maxvysmod(t_minus1), vys(i, j));
+                    minvysmod(t_minus1) = min(minvysmod(t_minus1), vys(i, j));
                 }
             }
             for (int j = 0; j < Nx1; j++) {
@@ -2319,65 +2345,55 @@ int main() {
             
             if (timesum_plus < timesum) {
                 // ========== save slip rate
-                ofstream out_Vslip;
-                out_Vslip.open("EVO_Vslip.txt");
+                ofstream out_Vslip("EVO_Vslip.txt", ios_base::app | ios_base::out);
                 out_Vslip << timesum << "    " << dt << "    " << VSLIPB.col(line_fault) << endl; // might be .row() ???
                 out_Vslip.close();
                 
                 // ========== save viscosity
-                ofstream out_viscosity;
-                out_viscosity.open("EVO_viscosity.txt");
+                ofstream out_viscosity("EVO_viscosity.txt", ios_base::app | ios_base::out);
                 out_viscosity << timesum << "    " << dt << "    " << ETA.col(line_fault) << endl; // might be .row() ???
                 out_viscosity.close();
                 
                 // ========== save fluid 
-                ofstream out_press_flu;
-                out_press_flu.open("EVO_press_flu.txt");
+                ofstream out_press_flu("EVO_press_flu.txt", ios_base::app | ios_base::out);
                 out_press_flu << timesum << "    " << dt << "    " << pf_ave.col(line_fault) << endl; // might be .row() ???
                 out_press_flu.close();
                 
                 // ========== save effective pressure
-                ofstream out_press_eff;
-                out_press_eff.open("EVO_press_eff.txt");
+                ofstream out_press_eff("EVO_press_eff.txt", ios_base::app | ios_base::out);
                 MatrixXd P_diff = pt_ave - pf_ave;
                 out_press_eff << timesum << "    " << dt << "    " << P_diff.col(line_fault) << endl; // might be .row() ???
                 out_press_eff.close();
                 
                 // ========== save SigmaY
-                ofstream out_SigmaY;
-                out_SigmaY.open("EVO_SigmaY.txt");
+                ofstream out_SigmaY("EVO_SigmaY.txt", ios_base::app | ios_base::out);
                 out_SigmaY << timesum << "    " << dt << "    " << SigmaY.col(line_fault) << endl; // might be .row() ???
                 out_SigmaY.close();
                 
                 // ========== save SII
-                ofstream out_Sii;
-                out_Sii.open("EVO_Sii.txt");
+                ofstream out_Sii("EVO_Sii.txt", ios_base::app | ios_base::out);
                 out_Sii << timesum << "    " << dt << "    " << SII_fault.col(line_fault) << endl; // might be .row() ???
                 out_Sii.close();
                 
                 // ========== save Theta
-                ofstream out_Theta;
-                out_Theta.open("EVO_Theta.txt");
+                ofstream out_Theta("EVO_Theta.txt", ios_base::app | ios_base::out);
                 out_Theta << timesum << "    " << dt << "    " << OM.col(line_fault) << endl; // might be .row() ???
                 out_Theta.close();
                 
                 // ========== save viscous compaction
-                ofstream out_Visc_comp;
-                out_Visc_comp.open("EVO_Visc_comp.txt");
+                ofstream out_Visc_comp("EVO_Visc_comp.txt", ios_base::app | ios_base::out);
                 out_Visc_comp << timesum << "    " << dt << "    " << VIS_COMP.col(line_fault) << endl; // might be .row() ???
                 out_Visc_comp.close();
                 
                 // ========== save elastic compaction
-                ofstream out_Elast_comp;
-                out_Elast_comp.open("EVO_Elast_comp.txt");
+                ofstream out_Elast_comp("EVO_Elast_comp.txt", ios_base::app | ios_base::out);
                 out_Elast_comp << timesum << "    " << dt << "    " << EL_DECOM.col(line_fault) << endl; // might be .row() ???
                 out_Elast_comp.close();
                 
                 // ========== save time, dt, vmax
-                ofstream out_data;
-                out_data.open("EVO_data.txt");
+                ofstream out_data("EVO_data.txt", ios_base::app | ios_base::out);
                 Vmax = VSLIPB.maxCoeff();
-                out_data << timesum << "    " << dt << "    " << Vmax << "    " << ynlast << "    " << iterstep << endl;
+                out_data << setw(20) << timesum << setw(20) << dt << setw(20) << Vmax << setw(20) << ynlast << setw(20) << iterstep << endl;
                 out_data.close();
                 
                 timesum_plus = timesum;
