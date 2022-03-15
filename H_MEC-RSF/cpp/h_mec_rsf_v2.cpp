@@ -65,7 +65,7 @@ const int num_timesteps = 10; // very small number for testing
 // ========================================
 // Define Numerical model
 // Eulerian basic grid
-/*
+
 const double xsize = 40000.;      // size in horizontal direction, m
 const double ysize = 10000.;      // size in vertical direction, m
 const int Nx = 161;               // number of grid steps in horizontal directions
@@ -77,8 +77,8 @@ const double TS_2 = 8e3;
 
 const double TS_3 = 34e3;
 const double TS_4 = 37e3;
-*/
 
+/*
 // very tiny test system
 const double xsize = 5000.;      // size in horizontal direction, m
 const double ysize = 1250.;      // size in vertical direction, m
@@ -91,7 +91,7 @@ const double TS_2 = 8e3 / 8.;
 
 const double TS_3 = 34e3 / 8.;
 const double TS_4 = 37e3 / 8.;
-
+*/
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
 const int Ny1 = Ny + 1;           // Number of vertical lines for staggered grid
