@@ -1054,8 +1054,6 @@ for timestep = timestep:1:num_timesteps
         total_viscoplastic = total_viscoplastic + toc(t_viscoplastic);
         % """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         
-        gggbkoef = 1; % define as global variable if no change of value
-        
         if(dt > 2e+5)
             pfscale = min(min(ETADX(2:Ny, 1:Nx))) * dx * 1e+17 / dt^2;
         else
@@ -1454,10 +1452,10 @@ for timestep = timestep:1:num_timesteps
                     L(kpf, kxf) = 1 / dx; %vxs2
                     L(kpf, kyf - 6) = -1 / dy; %vys1
                     L(kpf, kyf) = 1 / dy; %vys2
-                    L(kpf, kp) = -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + gggbkoef * BETTADRAINED * KBW / dt); %Pt
-                    L(kpf, kpf) = pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + gggbkoef * BETTADRAINED * KBW / KSK / dt); %Pf
+                    L(kpf, kp) = -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / dt); %Pt
+                    L(kpf, kpf) = pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETTADRAINED * KBW / KSK / dt); %Pf
                     % Right part
-                    R(kpf) = -gggbkoef * BETTADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
+                    R(kpf) = -BETTADRAINED * KBW * (PT0(i, j) - 1 / KSK * PF0(i, j)) / dt - DILP(i, j);
                 end
             end
         end
