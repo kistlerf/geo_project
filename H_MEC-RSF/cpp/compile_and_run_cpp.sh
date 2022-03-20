@@ -10,7 +10,7 @@ printf "0" >> file.txt
 
 export OMP_NUM_THREADS=1
 
-module load new gcc/6.3.0 eigen/3.2.1
+module load gcc/6.3.0 eigen/3.3.9
 
 g++ -std=gnu++11 -O3 h_mec_rsf_v2.cpp -o h_mec_cpp
 
