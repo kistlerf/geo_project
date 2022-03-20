@@ -80,17 +80,17 @@ const double TS_4 = 37e3;
 */
 
 // very tiny test system
-const double xsize = 10000.;      // size in horizontal direction, m
-const double ysize = 2500.;      // size in vertical direction, m
-const int Nx = 41;               // number of grid steps in horizontal directions
-const int Ny = 11;
+const double xsize = 5000.;      // size in horizontal direction, m
+const double ysize = 1250.;      // size in vertical direction, m
+const int Nx = 21;               // number of grid steps in horizontal directions
+const int Ny = 6;
 
 // Where to apply the transition on the left(1) and right(2)
-const double TS_1 = 6e3 / 4.;
-const double TS_2 = 8e3 / 4.;
+const double TS_1 = 6e3 / 8.;
+const double TS_2 = 8e3 / 8.;
 
-const double TS_3 = 34e3 / 4.;
-const double TS_4 = 37e3 / 4.;
+const double TS_3 = 34e3 / 8.;
+const double TS_4 = 37e3 / 8.;
 
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
@@ -1347,8 +1347,8 @@ int main() {
                         L.coeffRef(ky, ky) = -4. / 3. * (ETAYY1 + ETAYY2) / pow(dy, 2) - (ETAXY1 + ETAXY2) / pow(dx, 2) - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt; //vys3
                         L.coeffRef(ky, ky - Ny1 * 6) = ETAXY1 / pow(dx, 2); //vys1
                         L.coeffRef(ky, ky + Ny1 * 6) = ETAXY2 / pow(dx, 2); //vys5
-                        L.coeffRef(ky, ky - 6) = 4 / 3 * ETAYY1 / pow(dy, 2); //vys2
-                        L.coeffRef(ky, ky + 6) = 4 / 3 * ETAYY2 / pow(dy, 2); //vys4
+                        L.coeffRef(ky, ky - 6) = 4. / 3. * ETAYY1 / pow(dy, 2); //vys2
+                        L.coeffRef(ky, ky + 6) = 4. / 3. * ETAYY2 / pow(dy, 2); //vys4
                         L.coeffRef(ky, kx - Ny1 * 6) = ETAXY1 / dx / dy - 2. / 3. * ETAYY1 / dx / dy - gy * dt * dRHOdx / 4.; //vxs1
                         L.coeffRef(ky, kx + 6 - Ny1 * 6) = -ETAXY1 / dx / dy + 2. / 3. * ETAYY2 / dx / dy - gy * dt * dRHOdx / 4.; //vxs2
                         L.coeffRef(ky, kx) = -ETAXY2 / dx / dy + 2. / 3. * ETAYY1 / dx / dy - gy * dt * dRHOdx / 4.; //vxs3
@@ -1372,7 +1372,7 @@ int main() {
                         //               |
                         //              vys2
                         // Drained compressibility
-                        BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                        BETADRAINED = (1. / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
                         KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
