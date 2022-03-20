@@ -80,17 +80,17 @@ const double TS_4 = 37e3;
 */
 
 // very tiny test system
-const double xsize = 5000.;      // size in horizontal direction, m
-const double ysize = 1250.;      // size in vertical direction, m
-const int Nx = 21;               // number of grid steps in horizontal directions
-const int Ny = 6;
+const double xsize = 10000.;      // size in horizontal direction, m
+const double ysize = 2500.;      // size in vertical direction, m
+const int Nx = 41;               // number of grid steps in horizontal directions
+const int Ny = 11;
 
 // Where to apply the transition on the left(1) and right(2)
-const double TS_1 = 6e3 / 8.;
-const double TS_2 = 8e3 / 8.;
+const double TS_1 = 6e3 / 4.;
+const double TS_2 = 8e3 / 4.;
 
-const double TS_3 = 34e3 / 8.;
-const double TS_4 = 37e3 / 8.;
+const double TS_3 = 34e3 / 4.;
+const double TS_4 = 37e3 / 4.;
 
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
