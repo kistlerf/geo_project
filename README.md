@@ -17,3 +17,11 @@ flags to include Eigen:
   -I/usr/include/eigen3
 other flags:
   -O3 (to activate optimizer -> greatly increases speed)
+
+=====================================================
+
+To run the code on EULER use the
+```
+env2lmod
+```
+and the .sh script provided in the corresponding folder of this project.
