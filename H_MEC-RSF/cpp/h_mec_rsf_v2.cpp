@@ -1011,7 +1011,7 @@ int main() {
             for (int j = 0; j < Nx; j++) {
                 double wtsum = WTSUM(i, j);
                 if (wtsum > 0) {
-                    RHO(i, j) = RHOSUM(i, j) /wtsum;
+                    RHO(i, j) = RHOSUM(i, j) / wtsum;
                     KKK(i, j) = KKKSUM(i, j) / wtsum;
                     TTT(i, j) = TTTSUM(i, j) / wtsum;
                     GGG(i, j) = 1. / (GGGSUM(i, j) / wtsum);
@@ -1251,15 +1251,18 @@ int main() {
                         dRHOdx = (RHOX(i, j + 1) - RHOX(i, j - 1)) / (2. * dx);
                         dRHOdy = (RHO(i, j) - RHO(i - 1, j)) / dy;
                         // Left part
-                        L.coeffRef(kx, kx) = -4. / 3. * (ETAXX1 + ETAXX2) / pow(dx, 2) - (ETAXY1 + ETAXY2) / pow(dy, 2) - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt; //vxs3
-                        L.coeffRef(kx, kx - Ny1 * 6) = 4. / 3. * ETAXX1 / pow(dx, 2); //vxs1
-                        L.coeffRef(kx, kx + Ny1 * 6) = 4. / 3. * ETAXX2 / pow(dx, 2); //vxs5
-                        L.coeffRef(kx, kx - 6) = ETAXY1 / pow(dy, 2); //vxs2
-                        L.coeffRef(kx, kx + 6) = ETAXY2 / pow(dy, 2); //vxs4
-                        L.coeffRef(kx, ky - 6) = ETAXY1 / dx / dy - 2. / 3. * ETAXX1 / dx / dy - gx * dt * dRHOdy / 4.; //vys1
-                        L.coeffRef(kx, ky) = -ETAXY2 / dx / dy + 2. / 3. * ETAXX1 / dx / dy - gx * dt * dRHOdy / 4.; //vys2
-                        L.coeffRef(kx, ky - 6 + Ny1 * 6) = -ETAXY1 / dx / dy + 2. / 3. * ETAXX2 / dx / dy - gx * dt * dRHOdy / 4.; //vys3
-                        L.coeffRef(kx, ky + Ny1 * 6) = ETAXY2 / dx / dy - 2. / 3. * ETAXX2 / dx / dy - gx * dt * dRHOdy / 4.; //vys4
+                        double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
+                        L.coeffRef(kx, kx) = -4. / 3. * (ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt; //vxs3
+                        L.coeffRef(kx, kx - Ny1 * 6) = 4. / 3. * ETAXX1 / dx2; //vxs1
+                        L.coeffRef(kx, kx + Ny1 * 6) = 4. / 3. * ETAXX2 / dx2; //vxs5
+                        L.coeffRef(kx, kx - 6) = ETAXY1 / dy2; //vxs2
+                        L.coeffRef(kx, kx + 6) = ETAXY2 / dy2; //vxs4
+                        double gx_dt_dRHOdy = gx * dt * dRHOdy / 4.;
+                        double dx_dy = dx * dy;
+                        L.coeffRef(kx, ky - 6) = ETAXY1 / dx_dy - 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy; //vys1
+                        L.coeffRef(kx, ky) = -ETAXY2 / dx_dy + 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy; //vys2
+                        L.coeffRef(kx, ky - 6 + Ny1 * 6) = -ETAXY1 / dx_dy + 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy; //vys3
+                        L.coeffRef(kx, ky + Ny1 * 6) = ETAXY2 / dx_dy - 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy; //vys4
                         L.coeffRef(kx, kp) = ptscale / dx; //Pt1'
                         L.coeffRef(kx, kp + Ny1 * 6) = -ptscale / dx; //Pt2'
                         // Right part
@@ -1344,15 +1347,18 @@ int main() {
                         dRHOdy = (RHOY(i + 1, j) - RHOY(i - 1, j)) / 2. / dy;
                         dRHOdx = (RHO(i, j) - RHO(i, j - 1)) / dx;
                         // Left part
-                        L.coeffRef(ky, ky) = -4. / 3. * (ETAYY1 + ETAYY2) / pow(dy, 2) - (ETAXY1 + ETAXY2) / pow(dx, 2) - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt; //vys3
-                        L.coeffRef(ky, ky - Ny1 * 6) = ETAXY1 / pow(dx, 2); //vys1
-                        L.coeffRef(ky, ky + Ny1 * 6) = ETAXY2 / pow(dx, 2); //vys5
-                        L.coeffRef(ky, ky - 6) = 4. / 3. * ETAYY1 / pow(dy, 2); //vys2
-                        L.coeffRef(ky, ky + 6) = 4. / 3. * ETAYY2 / pow(dy, 2); //vys4
-                        L.coeffRef(ky, kx - Ny1 * 6) = ETAXY1 / dx / dy - 2. / 3. * ETAYY1 / dx / dy - gy * dt * dRHOdx / 4.; //vxs1
-                        L.coeffRef(ky, kx + 6 - Ny1 * 6) = -ETAXY1 / dx / dy + 2. / 3. * ETAYY2 / dx / dy - gy * dt * dRHOdx / 4.; //vxs2
-                        L.coeffRef(ky, kx) = -ETAXY2 / dx / dy + 2. / 3. * ETAYY1 / dx / dy - gy * dt * dRHOdx / 4.; //vxs3
-                        L.coeffRef(ky, kx + 6) = ETAXY2 / dx / dy - 2. / 3. * ETAYY2 / dx / dy - gy * dt * dRHOdx / 4.; //vxs4
+                        double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
+                        L.coeffRef(ky, ky) = -4. / 3. * (ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt; //vys3
+                        L.coeffRef(ky, ky - Ny1 * 6) = ETAXY1 / dx2; //vys1
+                        L.coeffRef(ky, ky + Ny1 * 6) = ETAXY2 / dx2; //vys5
+                        L.coeffRef(ky, ky - 6) = 4. / 3. * ETAYY1 / dy2; //vys2
+                        L.coeffRef(ky, ky + 6) = 4. / 3. * ETAYY2 / dy2; //vys4
+                        double gy_dt_dRHOdx = gy * dt * dRHOdx / 4.;
+                        double dx_dy = dx * dy;
+                        L.coeffRef(ky, kx - Ny1 * 6) = ETAXY1 / dx_dy - 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx; //vxs1
+                        L.coeffRef(ky, kx + 6 - Ny1 * 6) = -ETAXY1 / dx_dy + 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx; //vxs2
+                        L.coeffRef(ky, kx) = -ETAXY2 / dx_dy + 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx; //vxs3
+                        L.coeffRef(ky, kx + 6) = ETAXY2 / dx_dy - 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx; //vxs4
                         L.coeffRef(ky, kp) = ptscale / dy; //Pt1'
                         L.coeffRef(ky, kp + 6) = -ptscale / dy; //Pt2'
                         // Right part
@@ -1778,8 +1784,8 @@ int main() {
                             EIISLIP = V / dx / 2.;
                             
                             // Compute new ETAVP
-                            ETAPL = SIIB1 / 2 / EIISLIP;
-                            ETAVP = 1 / (1 / eta0_temp + 1 / ETAPL);
+                            ETAPL = SIIB1 / 2. / EIISLIP;
+                            ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
                             kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
                             SIIB2 = siiel * kfxy1;

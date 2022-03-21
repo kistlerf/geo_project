@@ -2155,7 +2155,7 @@ for timestep = timestep:1:num_timesteps
     vym = zeros(4, 1);
     spm = zeros(4, 1);
     % Move markers by nodal velocity field
-    for m = 1:-1:marknum
+    for m = 1:1:marknum
         % Save marker position
         xold = xm(m);
         yold = ym(m);
