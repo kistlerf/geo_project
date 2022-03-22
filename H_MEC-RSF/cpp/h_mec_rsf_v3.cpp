@@ -79,20 +79,6 @@ const double TS_2 = 8e3;
 const double TS_3 = 34e3;
 const double TS_4 = 37e3;
 
-/*
-// very tiny test system
-const double xsize = 10000.;      // size in horizontal direction, m
-const double ysize = 2500.;      // size in vertical direction, m
-const int Nx = 41;               // number of grid steps in horizontal directions
-const int Ny = 11;
-
-// Where to apply the transition on the left(1) and right(2)
-const double TS_1 = 6e3 / 4.;
-const double TS_2 = 8e3 / 4.;
-
-const double TS_3 = 34e3 / 4.;
-const double TS_4 = 37e3 / 4.;
-*/
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
 const int Ny1 = Ny + 1;           // Number of vertical lines for staggered grid
@@ -309,7 +295,7 @@ VectorXd porm(marknum);         // Porosity of solid
 VectorXd kkkm(marknum);         // Standard permeability of solid
 VectorXd rhofm(marknum);        // Density of fluid
 VectorXd etafm(marknum);        // Viscosity of fluid
-VectorXd t_marker(marknum);           // Marker rock type
+VectorXd t_marker(marknum);     // Marker rock type
 VectorXd xm(marknum);           // Horizontal coordinates of solid markers
 VectorXd ym(marknum);           // Vertical coordinates of solid markers
 VectorXd sxxm(marknum);         // Marker SIGMAxx', Pa
@@ -389,6 +375,7 @@ MatrixXd VIS_COMP(Ny1, Nx1);
 
 // (3) Defining global matrixes
 // according to the global number of unknowns
+// Sparse Matrix L is not yet defined as it will be built from a set of Triplets each step
 VectorXd R(N); // Vector of the right parts of equations
 VectorXd S(N);
 
@@ -529,8 +516,8 @@ int main() {
         
         // Define Fault
         for (int i = 0; i < Ny; i++) {
-            for (int j = 0; j < Nx; j++) {
-                if (y(i) > upper_block && y(i) < lower_block) {
+            if (y(i) > upper_block && y(i) < lower_block) {
+                for (int j = 0; j < Nx; j++) {
                     OM0(i, j) = omm(1);
                 
                     if (x(j) >= TS_1 && x(j) < TS_2) {
@@ -612,6 +599,21 @@ int main() {
         vy0m.setZero();        // Marker vertical velocity
         ptfm.setZero();        // Pt - Pf, Pa
         amursfm.setZero();     // RSF a / mu parameter
+
+        t_marker = VectorXd::Constant(marknum, 1);
+        rhom = VectorXd::Constant(marknum, 3000);
+        etasm = VectorXd::Constant(marknum, 1e22);
+        gsm = VectorXd::Constant(marknum, shearmod);
+        cohescm = VectorXd::Constant(marknum, cohes);
+        cohestm = VectorXd::Constant(marknum, cohes);
+        frictcm = VectorXd::Constant(marknum, friction);
+        dilatcm = VectorXd::Constant(marknum, dilatation);
+        fricttm = VectorXd::Constant(marknum, tensile);
+        kkkm = VectorXd::Constant(marknum, 5e-16); // * (dy / faultwidth)^2;
+        rhofm = VectorXd::Constant(marknum, 1000);
+        etafm = VectorXd::Constant(marknum, 1e-3);
+
+        gm = gsm; // * (1 - porm(m));
         
         int m = 0;
         for (int jm = 0; jm < Nx_markers; jm++) {
@@ -620,22 +622,9 @@ int main() {
                 xm(m) = xbeg + jm * dxms + (rand() % 1) * dxms;
                 ym(m) = ybeg + im * dyms + (rand() % 1) * dyms;
                 //Matrix
-                t_marker(m) = 1;
-                rhom(m) = 3000;
-                etasm(m) = 1e22;
-                gsm(m) = shearmod;
-                cohescm(m) = cohes;
-                cohestm(m) = cohes;
-                frictcm(m) = friction;
-                dilatcm(m) = dilatation;
-                fricttm(m) = tensile;
                 porm(m) = .01 * (1 + .0 * (rand() % 1 - .5));
-                kkkm(m) = 5e-16; // * (dy / faultwidth)^2;
-                rhofm(m) = 1000;
-                etafm(m) = 1e-3;
                 etam(m) = etasm(m) * exp(-alpha * porm(m));
                 etabm(m) = etam(m) / porm(m); // / (1 - porm(m));
-                gm(m) = gsm(m); // * (1 - porm(m));
                 
                 // Air, wedge, slab
                 if (ym(m) < upper_block || ym(m) > lower_block) {
