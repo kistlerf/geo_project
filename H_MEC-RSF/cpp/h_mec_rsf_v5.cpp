@@ -66,7 +66,7 @@ typedef MatrixXd MatXd;
 // ====================================================================================
 
 // set timestep limit
-const int num_timesteps = 100; // very small number for testing
+const int num_timesteps = 10; // very small number for testing
 
 // ========================================
 // Define Numerical model
@@ -384,6 +384,7 @@ MatXd VIS_COMP(Ny1, Nx1);
 int kp, kx, ky, kpf, kxf, kyf; // this could maybe be made into a vector
 VecXd R(N); // Vector of the right parts of equations
 VecXd S(N);
+PardisoLU<SparseMatrix<double>> solver;
 
 // variable type declaration
 int ynlast;
@@ -934,9 +935,6 @@ int main() {
         ynlast = 0;
         
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
-            
-            auto start_iterstep = hrc::now();
-
             // Limiting viscosity
             etamincur = shearmod * dt * 1e-4;
             
@@ -1004,11 +1002,6 @@ int main() {
             }
             
             ptscale = pfscale;
-            
-            auto stop_iterstep_4 = hrc::now();
-
-            auto duration_iterstep_4 = duration_cast<milliseconds>(stop_iterstep_4 - start_iterstep);
-            cout << "Duration of iterstep_4:        " << duration_iterstep_4.count() / 1000. << " seconds" << endl;
             
             // This loop here is now the most timeconsuming part -> next step: try to replace coeffRef if possible, maybe use Triplet format
             // 5)Composing global matrixes L(), R()
@@ -1385,39 +1378,13 @@ int main() {
                 }
             }
 
-
-            auto stop_iterstep_3 = hrc::now();
-
-            auto duration_iterstep_3 = duration_cast<milliseconds>(stop_iterstep_3 - start_iterstep);
-            cout << "Duration of iterstep_3:        " << duration_iterstep_3.count() / 1000. << " seconds" << endl;
-
-            cout << "\nstart solving LSE" << endl;
-            
-            auto start = hrc::now();
-
             SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
-            L.setFromTriplets(Trip.begin(), Trip.end());
+            L.setFromTriplets(Trip.begin(), Trip.end()); // Build Sparse Matrix
             // 6) Solving matrix
-            PardisoLU<SparseMatrix<double>> solver;
             L.makeCompressed();
             solver.analyzePattern(L);
-            auto stop_fact_3 = hrc::now();
             solver.factorize(L); // Computationally most costly line in the code
-
-            auto stop_fact = hrc::now();
-
             S = solver.solve(R);
-
-            auto stop = hrc::now();
-
-            auto duration_fact_2 = duration_cast<milliseconds>(stop_fact_3 - start);
-            auto duration_fact_3 = duration_cast<milliseconds>(stop_fact - start);
-            auto duration = duration_cast<milliseconds>(stop - start);
-            cout << "factorisation        " << (duration_fact_3.count() - duration_fact_2.count()) / 1000. << " seconds" << endl;
-            cout << "solving              " << (duration.count() - duration_fact_3.count()) / 1000. << " seconds" << endl;
-            
-            cout << "LSE success\n" << endl;
-            
             // 7) Reload solution
             // pfavr = 0;
             // pcount = 0;
@@ -1520,6 +1487,7 @@ int main() {
             // Process pressure cells
             for (int i = 1; i < Ny; i++) {
                 for (int j = 1; j < Nx; j++) {
+                    // reducing matrix calls
                     double sky_ij = SXY(i, j), sky_i1j = SXY(i - 1, j), sky_ij1 = SXY(i, j - 1), sky_i1j1 = SXY(i - 1, j - 1);
                     double eta_ij_2 = 2 * ETA(i, j), eta_i1j_2 = 2 * ETA(i - 1, j), eta_ij1_2 = 2 * ETA(i, j - 1), eta_i1j1_2 = 2 * ETA(i - 1, j - 1);
                     double sxx_ij = SXX(i, j), syy_ij = SYY(i, j);
@@ -1540,7 +1508,7 @@ int main() {
                     DIS(i, j) = pow(sxx_ij, 2) / etap_2 + pow(syy_ij, 2) / etap_2 + 2 * DISXY;
                 }
             }
-                        
+
             // Update viscosity for yielding
             AXY.setZero();
             // dt0 = dt;dt = dt * 1.1;
@@ -1555,11 +1523,6 @@ int main() {
             dtlapusta = 1e7;
             OM5 = OM;
 
-            auto stop_iterstep_2 = hrc::now();
-
-            auto duration_iterstep_2 = duration_cast<milliseconds>(stop_iterstep_2 - start_iterstep);
-            cout << "Duration of iterstep_2:        " << duration_iterstep_2.count() / 1000. << " seconds" << endl;
-
             // Power law plasticity model Yi et al., 2018
             // Journal of Offshore Mechanics and Arctic Engineering
             double dtslip = 1e30;
@@ -1568,11 +1531,7 @@ int main() {
                     if (y(i)  >= upper_block && y(i)  <= lower_block) {
                         for (int j = 0; j < Nx; j++) {
                             // reducing matrix calls
-                            double arsf_temp = ARSF(i, j);
-                            double brsf_temp = BRSF(i, j);
-                            double lrsf_temp = LRSF(i, j);
-                            double fric_temp = FRIC(i, j);
-                            double eta0_temp = ETA0(i, j);
+                            double arsf_temp = ARSF(i, j), brsf_temp = BRSF(i, j), lrsf_temp = LRSF(i, j), fric_temp = FRIC(i, j), eta0_temp = ETA0(i, j);
 
                             double sxx_temp_4 = SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1) / 4.;
                             double syy_temp_4 = SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1) / 4.;
@@ -1677,7 +1636,7 @@ int main() {
                             // "/ BETASOLID" -> Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
                             double vi = (3. / BETASOLID - g_temp) / (6. / BETASOLID + g_temp);
                             double k = g_temp / (pi * (1 - vi) * dx);
-                            double xi = .25 * pow(k * lrsf_temp / arsf_temp / prB - (brsf_temp - arsf_temp) / arsf_temp, 2) - k * lrsf_temp / arsf_temp / prB;
+                            double xi = .25 * pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) - k * lrsf_temp / arsf_temp / prB;
                             if (xi < 0) {
                                 dTETAmax = min(1. - (brsf_temp - arsf_temp) * prB / (k * lrsf_temp), .2);
                             } else {
@@ -1720,11 +1679,6 @@ int main() {
                     }
                 }
             }
-
-            auto stop_iterstep_1 = hrc::now();
-
-            auto duration_iterstep_1 = duration_cast<milliseconds>(stop_iterstep_1 - start_iterstep);
-            cout << "Duration of iterstep_1:        " << duration_iterstep_1.count() / 1000. << " seconds" << endl;
             
             // Compute Error
             DSYLSQ(iterstep) = 0;
@@ -1846,11 +1800,6 @@ int main() {
                 OM = OM5;
             }
 
-            auto stop_iterstep = hrc::now();
-
-            auto duration_iterstep = duration_cast<milliseconds>(stop_iterstep - start_iterstep);
-            cout << "Duration of iterstep:        " << duration_iterstep.count() / 1000. << " seconds" << endl;
-            
             // Exit iteration
             if (ynstop) {
                 break;
@@ -2083,17 +2032,17 @@ int main() {
             }
         }
 
-        int t_minus1 = timestep - 1;
+        int t_1 = timestep - 1;
         
         // Update timesum
         timesum = timesum + dt;
-        timesumcur(t_minus1) = timesum;
-        dtcur(t_minus1) = dt;
+        timesumcur(t_1) = timesum;
+        dtcur(t_1) = dt;
         
-        maxvxsmod(t_minus1) = -1e30;
-        minvxsmod(t_minus1) = 1e30;
-        maxvysmod(t_minus1) = -1e30;
-        minvysmod(t_minus1) = 1e30;
+        maxvxsmod(t_1) = -1e30;
+        minvxsmod(t_1) = 1e30;
+        maxvysmod(t_1) = -1e30;
+        minvysmod(t_1) = 1e30;
 
         VX0 = vxs;
         VY0 = vys;
@@ -2102,13 +2051,13 @@ int main() {
             for (int j = 0; j < Nx; j++) {
                 // Vx
                 if (RHOX(i, j) > 2000 && i != 0) {
-                    maxvxsmod(t_minus1) = max(maxvxsmod(t_minus1), vxs(i, j));
-                    minvxsmod(t_minus1) = min(minvxsmod(t_minus1), vxs(i, j));
+                    maxvxsmod(t_1) = max(maxvxsmod(t_1), vxs(i, j));
+                    minvxsmod(t_1) = min(minvxsmod(t_1), vxs(i, j));
                 }
                 // Vy
                 if (RHOY(i, j) > 2000 && j != 0) {
-                    maxvysmod(t_minus1) = max(maxvysmod(t_minus1), vys(i, j));
-                    minvysmod(t_minus1) = min(minvysmod(t_minus1), vys(i, j));
+                    maxvysmod(t_1) = max(maxvysmod(t_1), vys(i, j));
+                    minvysmod(t_1) = min(minvysmod(t_1), vys(i, j));
                 }
             }
         }
@@ -2145,8 +2094,8 @@ int main() {
         cout << "total time:        " << timesum << " sec" << endl;
         cout << "time step:         " << dt << " sec" << endl;
         cout << "Vslip max:         " << Vmax << endl;
-        cout << "iter - iterations:   " << iterstep << endl;
-        cout << "global - iterations: " << ynlast << endl;
+        cout << "iter - iterations:   " << iterstep + 1 << endl;
+        cout << "global - iterations: " << ynlast + 1 << endl;
         
         if (seismic_cycles_data) {
             
@@ -2160,53 +2109,53 @@ int main() {
             if (timesum_plus < timesum) {
                 // ========== save slip rate
                 ofstream out_Vslip("EVO_Vslip.txt", ios_base::app | ios_base::out);
-                out_Vslip << timesum << "    " << dt << "    " << VSLIPB.row(line_fault) << endl; // might be .row() ???
+                out_Vslip << timesum << "    " << dt << "    " << VSLIPB.row(line_fault) << endl;
                 out_Vslip.close();
                 
                 // ========== save viscosity
                 ofstream out_viscosity("EVO_viscosity.txt", ios_base::app | ios_base::out);
-                out_viscosity << timesum << "    " << dt << "    " << ETA.row(line_fault) << endl; // might be .row() ???
+                out_viscosity << timesum << "    " << dt << "    " << ETA.row(line_fault) << endl;
                 out_viscosity.close();
                 
                 // ========== save fluid 
                 ofstream out_press_flu("EVO_press_flu.txt", ios_base::app | ios_base::out);
-                out_press_flu << timesum << "    " << dt << "    " << pf.row(line_fault) << endl; // might be .row() ???
+                out_press_flu << timesum << "    " << dt << "    " << pf.row(line_fault) << endl;
                 out_press_flu.close();
                 
                 // ========== save effective pressure
                 ofstream out_press_eff("EVO_press_eff.txt", ios_base::app | ios_base::out);
                 MatXd P_diff = pt - pf;
-                out_press_eff << timesum << "    " << dt << "    " << P_diff.row(line_fault) << endl; // might be .row() ???
+                out_press_eff << timesum << "    " << dt << "    " << P_diff.row(line_fault) << endl;
                 out_press_eff.close();
                 
                 // ========== save SigmaY
                 ofstream out_SigmaY("EVO_SigmaY.txt", ios_base::app | ios_base::out);
-                out_SigmaY << timesum << "    " << dt << "    " << SigmaY.row(line_fault) << endl; // might be .row() ???
+                out_SigmaY << timesum << "    " << dt << "    " << SigmaY.row(line_fault) << endl;
                 out_SigmaY.close();
                 
                 // ========== save SII
                 ofstream out_Sii("EVO_Sii.txt", ios_base::app | ios_base::out);
-                out_Sii << timesum << "    " << dt << "    " << SII_fault.row(line_fault) << endl; // might be .row() ???
+                out_Sii << timesum << "    " << dt << "    " << SII_fault.row(line_fault) << endl;
                 out_Sii.close();
                 
                 // ========== save Theta
                 ofstream out_Theta("EVO_Theta.txt", ios_base::app | ios_base::out);
-                out_Theta << timesum << "    " << dt << "    " << OM.row(line_fault) << endl; // might be .row() ???
+                out_Theta << timesum << "    " << dt << "    " << OM.row(line_fault) << endl;
                 out_Theta.close();
                 
                 // ========== save viscous compaction
                 ofstream out_Visc_comp("EVO_Visc_comp.txt", ios_base::app | ios_base::out);
-                out_Visc_comp << timesum << "    " << dt << "    " << VIS_COMP.row(line_fault) << endl; // might be .row() ???
+                out_Visc_comp << timesum << "    " << dt << "    " << VIS_COMP.row(line_fault) << endl;
                 out_Visc_comp.close();
                 
                 // ========== save elastic compaction
                 ofstream out_Elast_comp("EVO_Elast_comp.txt", ios_base::app | ios_base::out);
-                out_Elast_comp << timesum << "    " << dt << "    " << EL_DECOM.row(line_fault) << endl; // might be .row() ???
+                out_Elast_comp << timesum << "    " << dt << "    " << EL_DECOM.row(line_fault) << endl;
                 out_Elast_comp.close();
 
                 // ========== save vx Darcy
                 ofstream out_EVO_vxD("EVO_vxD.txt", ios_base::app | ios_base::out);
-                out_EVO_vxD << timesum << "    " << dt << "    " << vxD.row(line_fault) << endl; // might be .row() ???
+                out_EVO_vxD << timesum << "    " << dt << "    " << vxD.row(line_fault) << endl;
                 out_EVO_vxD.close();
                 
                 // ========== save time, dt, vmax
@@ -2233,6 +2182,5 @@ int main() {
         }
         
     }
-
     return 0;
 }
