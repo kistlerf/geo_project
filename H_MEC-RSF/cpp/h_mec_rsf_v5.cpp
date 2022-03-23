@@ -453,6 +453,15 @@ auto fix = [](double x) {
   return x < 0. ? (int)ceil(x) : (int)floor(x);
 };
 
+auto enforce_bounds = [](double val, double min, double max) {
+    if (val < min) {
+        val = min;
+    } else if (val > max) {
+        val = max;
+    }
+    return val;
+};
+
 int check_bounds(int k, int bound) {
     if (k < 0) {
         k = 0;
@@ -716,12 +725,7 @@ int main() {
             // Marker properties
             double kkkmm = kkkm(m) * pow(porm(m) / POR0, 3);
             // Checking permeability limits
-            if (kkkmm < kkkmin) {
-                kkkmm = kkkmin;
-            }
-            if (kkkmm > kkkmax) {
-                kkkmm = kkkmax;
-            }
+            kkkmm = enforce_bounds(kkkmm, kkkmin, kkkmax);
 
             // Cohesion, friction of porous matrix
             
@@ -750,19 +754,9 @@ int main() {
                 rhomm = rhom(m);
             }
             // Matrix viscosity
-            if (etamm0 < etamin) {
-                etamm0 = etamin;
-            }
-            if (etamm0 > etamax) {
-                etamm0 = etamax;
-            }
+            etamm0 = enforce_bounds(etamm0, etamin, etamax);
             // Effective viscosity
-            if (etamm < etamin) {
-                etamm = etamin;
-            }
-            if (etamm > etamax) {
-                etamm = etamax;
-            }
+            etamm = enforce_bounds(etamm, etamin, etamax);
             
             // Darsi "viscosity"
             etadm = etafm(m) / kkkmm;
@@ -1042,9 +1036,8 @@ int main() {
             
             // This loop here is now the most timeconsuming part -> next step: try to replace coeffRef if possible, maybe use Triplet format
             // 5)Composing global matrixes L(), R()
-            int access = 0;
 
-            vector<Trp> Triplets; // define triplet list to build sparse matrix
+            vector<Trp> Trip; // define triplet list to build sparse matrix
 
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
@@ -1060,43 +1053,38 @@ int main() {
                     if (i == 0 || i == Ny || j == 0 || j >= Nx - 1) {
                         // Ghost nodes: 1 * vxs = 0
                         if (j == Nx) {
-                            Triplets.push_back(Trp(kx, kx, 1));
+                            Trip.push_back(Trp(kx, kx, 1));
                             R(kx) = 0;
-                            access++;
                         }
                         
                         // Upper boundary
                         // prescribed velocity
                         if (i == 0 && j < Nx) {
-                            Triplets.push_back(Trp(kx, kx, 1));
-                            Triplets.push_back(Trp(kx, kx + 6, 1));
+                            Trip.push_back(Trp(kx, kx, 1));
+                            Trip.push_back(Trp(kx, kx + 6, 1));
                             R(kx) = 2 * bcupper;
-                            access += 2;
                         }
                         
                         // Lower boundary
                         // prescribed velocity
                         if (i == Ny && j < Nx) {
-                            Triplets.push_back(Trp(kx, kx, 1));
-                            Triplets.push_back(Trp(kx, kx - 6, 1));
+                            Trip.push_back(Trp(kx, kx, 1));
+                            Trip.push_back(Trp(kx, kx - 6, 1));
                             R(kx) = 2 * bclower;
-                            access += 2;
                         }
                         
                         // Left boundary:
                         if (j == 0 && i > 0 && i < Ny) {
-                            Triplets.push_back(Trp(kx, kx, 1));
-                            Triplets.push_back(Trp(kx, kx + 6 * Ny1, -1));
+                            Trip.push_back(Trp(kx, kx, 1));
+                            Trip.push_back(Trp(kx, kx + 6 * Ny1, -1));
                             R(kx) = 0;
-                            access += 2;
                         }
                         
                         // Right boundary
                         if (j == Nx - 1 && i > 0 && i < Ny) {
-                            Triplets.push_back(Trp(kx, kx, 1));
-                            Triplets.push_back(Trp(kx, kx - 6 * Ny1, -1));
+                            Trip.push_back(Trp(kx, kx, 1));
+                            Trip.push_back(Trp(kx, kx - 6 * Ny1, -1));
                             R(kx) = 0;
-                            access += 2;
                         }
                         
                     } else {
@@ -1139,20 +1127,19 @@ int main() {
                         dRHOdy = (RHO(i, j) - RHO(i - 1, j)) / dy;
                         // Left part
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        Triplets.push_back(Trp(kx, kx, -4. / 3. * (ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt)); //vxs3
-                        Triplets.push_back(Trp(kx, kx - Ny1 * 6, 4. / 3. * ETAXX1 / dx2)); //vxs1
-                        Triplets.push_back(Trp(kx, kx + Ny1 * 6, 4. / 3. * ETAXX2 / dx2)); //vxs5
-                        Triplets.push_back(Trp(kx, kx - 6, ETAXY1 / dy2)); //vxs2
-                        Triplets.push_back(Trp(kx, kx + 6, ETAXY2 / dy2)); //vxs4
+                        Trip.push_back(Trp(kx, kx, -4. / 3. * (ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt)); //vxs3
+                        Trip.push_back(Trp(kx, kx - Ny1 * 6, 4. / 3. * ETAXX1 / dx2)); //vxs1
+                        Trip.push_back(Trp(kx, kx + Ny1 * 6, 4. / 3. * ETAXX2 / dx2)); //vxs5
+                        Trip.push_back(Trp(kx, kx - 6, ETAXY1 / dy2)); //vxs2
+                        Trip.push_back(Trp(kx, kx + 6, ETAXY2 / dy2)); //vxs4
                         double gx_dt_dRHOdy = gx * dt * dRHOdy / 4.;
                         double dx_dy = dx * dy;
-                        Triplets.push_back(Trp(kx, ky - 6, ETAXY1 / dx_dy - 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys1
-                        Triplets.push_back(Trp(kx, ky, -ETAXY2 / dx_dy + 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys2
-                        Triplets.push_back(Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys3
-                        Triplets.push_back(Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys4
-                        Triplets.push_back(Trp(kx, kp, ptscale / dx)); //Pt1'
-                        Triplets.push_back(Trp(kx, kp + Ny1 * 6, -ptscale / dx)); //Pt2'
-                        access += 11;
+                        Trip.push_back(Trp(kx, ky - 6, ETAXY1 / dx_dy - 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys1
+                        Trip.push_back(Trp(kx, ky, -ETAXY2 / dx_dy + 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys2
+                        Trip.push_back(Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys3
+                        Trip.push_back(Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys4
+                        Trip.push_back(Trp(kx, kp, ptscale / dx)); //Pt1'
+                        Trip.push_back(Trp(kx, kp + Ny1 * 6, -ptscale / dx)); //Pt2'
                         // Right part
                         R(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
@@ -1161,41 +1148,36 @@ int main() {
                     if (j == 0 || j == Nx || i == 0 || i >= Ny - 1) {
                         // Ghost nodes: 1 * vys = 0
                         if (i == Ny) {
-                            Triplets.push_back(Trp(ky, ky, 1));
+                            Trip.push_back(Trp(ky, ky, 1));
                             R(ky) = 0;
-                            access++;
                         }
                         
                         // Left boundary
                         // Free Slip
                         if (j == 0) {
-                            Triplets.push_back(Trp(ky, ky, 1));
-                            Triplets.push_back(Trp(ky, ky + Ny1 * 6, 1));
+                            Trip.push_back(Trp(ky, ky, 1));
+                            Trip.push_back(Trp(ky, ky + Ny1 * 6, 1));
                             R(ky) = 0;
-                            access += 2;
                         }
                         
                         // Right boundary
                         // Free Slip
                         if (j == Nx) {
-                            Triplets.push_back(Trp(ky, ky, 1));
-                            Triplets.push_back(Trp(ky, ky - Ny1 * 6, 1));
+                            Trip.push_back(Trp(ky, ky, 1));
+                            Trip.push_back(Trp(ky, ky - Ny1 * 6, 1));
                             R(ky) = 0;
-                            access += 2;
                         }
                         
                         // Upper boundary: no penetration
                         if (i == 0 && j > 0 && j < Nx) {
-                            Triplets.push_back(Trp(ky, ky, 1));
+                            Trip.push_back(Trp(ky, ky, 1));
                             R(ky) = 0;
-                            access++;
                         }
                         
                         // Lower boundary: no penetration
                         if (i == Ny - 1 && j > 0 && j < Nx) {
-                            Triplets.push_back(Trp(ky, ky, 1));
+                            Trip.push_back(Trp(ky, ky, 1));
                             R(ky) = 0;
-                            access++;
                         }
                         
                     } else {
@@ -1241,20 +1223,19 @@ int main() {
                         dRHOdx = (RHO(i, j) - RHO(i, j - 1)) / dx;
                         // Left part
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        Triplets.push_back(Trp(ky, ky, -4. / 3. * (ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt)); //vys3
-                        Triplets.push_back(Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2)); //vys1
-                        Triplets.push_back(Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2)); //vys5
-                        Triplets.push_back(Trp(ky, ky - 6, 4. / 3. * ETAYY1 / dy2)); //vys2
-                        Triplets.push_back(Trp(ky, ky + 6, 4. / 3. * ETAYY2 / dy2)); //vys4
+                        Trip.push_back(Trp(ky, ky, -4. / 3. * (ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt)); //vys3
+                        Trip.push_back(Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2)); //vys1
+                        Trip.push_back(Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2)); //vys5
+                        Trip.push_back(Trp(ky, ky - 6, 4. / 3. * ETAYY1 / dy2)); //vys2
+                        Trip.push_back(Trp(ky, ky + 6, 4. / 3. * ETAYY2 / dy2)); //vys4
                         double gy_dt_dRHOdx = gy * dt * dRHOdx / 4.;
                         double dx_dy = dx * dy;
-                        Triplets.push_back(Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs1
-                        Triplets.push_back(Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs2
-                        Triplets.push_back(Trp(ky, kx, -ETAXY2 / dx_dy + 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs3
-                        Triplets.push_back(Trp(ky, kx + 6, ETAXY2 / dx_dy - 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs4
-                        Triplets.push_back(Trp(ky, kp, ptscale / dy)); //Pt1'
-                        Triplets.push_back(Trp(ky, kp + 6, -ptscale / dy)); //Pt2'
-                        access += 11;
+                        Trip.push_back(Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs1
+                        Trip.push_back(Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs2
+                        Trip.push_back(Trp(ky, kx, -ETAXY2 / dx_dy + 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs3
+                        Trip.push_back(Trp(ky, kx + 6, ETAXY2 / dx_dy - 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs4
+                        Trip.push_back(Trp(ky, kp, ptscale / dy)); //Pt1'
+                        Trip.push_back(Trp(ky, kp + 6, -ptscale / dy)); //Pt2'
                         // Right part
                         R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
@@ -1262,9 +1243,8 @@ int main() {
                     // 5c) Composing equation for Pt
                     if (i == 0 || j == 0 || i == Ny || j == Nx) { // || (i == 2 && j == 2))
                         // BC equation: 1 * Pt = 0
-                        Triplets.push_back(Trp(kp, kp, 1));
+                        Trip.push_back(Trp(kp, kp, 1));
                         R(kp) = 0;
-                        access++;
                     } else {
                         // Solid Continuity: dVxs / dx + dVys / dy + (Pt - Pf) / ETAbulk = 0
                         //              vys1
@@ -1277,13 +1257,12 @@ int main() {
                         // Biott - Willis koefficient
                         KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
-                        Triplets.push_back(Trp(kp, kx - Ny1 * 6, -1. / dx)); //vxs1
-                        Triplets.push_back(Trp(kp, kx, 1. / dx)); //vxs2
-                        Triplets.push_back(Trp(kp, ky - 6, -1. / dy)); //vys1
-                        Triplets.push_back(Trp(kp, ky, 1. / dy)); //vys2
-                        Triplets.push_back(Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt))); //Pt
-                        Triplets.push_back(Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))); //Pf
-                        access += 6;
+                        Trip.push_back(Trp(kp, kx - Ny1 * 6, -1. / dx)); //vxs1
+                        Trip.push_back(Trp(kp, kx, 1. / dx)); //vxs2
+                        Trip.push_back(Trp(kp, ky - 6, -1. / dy)); //vys1
+                        Trip.push_back(Trp(kp, ky, 1. / dy)); //vys2
+                        Trip.push_back(Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt))); //Pt
+                        Trip.push_back(Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))); //Pf
                         // Right part
                         R(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
                     }
@@ -1292,41 +1271,36 @@ int main() {
                     if (i == 0 || i == Ny || j == 0 || j >= Nx - 1) {
                         // Ghost nodes: 1 * vxs = 0
                         if (j == Nx) {
-                            Triplets.push_back(Trp(kxf, kxf, 1));
+                            Trip.push_back(Trp(kxf, kxf, 1));
                             R(kxf) = 0;
-                            access++;
                         }
                         
                         // Upper boundary: symmetry
                         if (i == 0 && j < Nx) {
-                            Triplets.push_back(Trp(kxf, kxf, 1));
-                            Triplets.push_back(Trp(kxf, kxf + 6, -1));
+                            Trip.push_back(Trp(kxf, kxf, 1));
+                            Trip.push_back(Trp(kxf, kxf + 6, -1));
                             R(kxf) = 0;
-                            access += 2;
                         }
                         
                         // Lower boundary: symmetry
                         if (i == Ny && j < Nx) {
-                            Triplets.push_back(Trp(kxf, kxf, 1));
-                            Triplets.push_back(Trp(kxf, kxf - 6, -1));
+                            Trip.push_back(Trp(kxf, kxf, 1));
+                            Trip.push_back(Trp(kxf, kxf - 6, -1));
                             R(kxf) = 0;
-                            access += 2;
                         }
                         
                         // Left boundary
                         // no penetration
                         if (j == 0) {
-                            Triplets.push_back(Trp(kxf, kxf, 1));
+                            Trip.push_back(Trp(kxf, kxf, 1));
                             R(kxf) = 0; //bcvxfleft;
-                            access++;
                         }
                         
                         // Right boundary
                         // no penetration
                         if (j == Nx - 1) {
-                            Triplets.push_back(Trp(kxf, kxf, 1));
+                            Trip.push_back(Trp(kxf, kxf, 1));
                             R(kxf) = 0;
-                            access++;
                         }
                         
                     } else {
@@ -1335,11 +1309,10 @@ int main() {
                         //  Pf1 --- vxD, vxs --- Pf2
                         //
                         // Left part
-                        Triplets.push_back(Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * ascale / dt)); //vxD
-                        Triplets.push_back(Trp(kxf, kx, -RHOFX(i, j) * ascale / dt)); //vxs
-                        Triplets.push_back(Trp(kxf, kpf, pfscale / dx)); //Pf1'
-                        Triplets.push_back(Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)); //Pf2'
-                        access += 4;
+                        Trip.push_back(Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * ascale / dt)); //vxD
+                        Trip.push_back(Trp(kxf, kx, -RHOFX(i, j) * ascale / dt)); //vxs
+                        Trip.push_back(Trp(kxf, kpf, pfscale / dx)); //Pf1'
+                        Trip.push_back(Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)); //Pf2'
                         // Right part
                         R(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
                     }
@@ -1348,41 +1321,36 @@ int main() {
                     if (j == 0 || j == Nx || i == 0 || i >= Ny - 1) {
                         // Ghost nodes: 1 * vxs = 0
                         if (i == Ny) {
-                            Triplets.push_back(Trp(kyf, kyf, 1));
+                            Trip.push_back(Trp(kyf, kyf, 1));
                             R(kyf) = 0;
-                            access++;
                         }
                         
                         // Left boundary
                         // symmetry
                         if (j == 0 && i > 0 && i < Ny - 1) {
-                            Triplets.push_back(Trp(kyf, kyf, 1));
-                            Triplets.push_back(Trp(kyf, kyf + Ny1 * 6, -1));
-                            access += 2;
+                            Trip.push_back(Trp(kyf, kyf, 1));
+                            Trip.push_back(Trp(kyf, kyf + Ny1 * 6, -1));
                             R(kyf) = 0;
                         }
                         
                         // Right boundary
                         // symmetry
                         if (j == Nx && i > 0 && i < Ny - 1) {
-                            Triplets.push_back(Trp(kyf, kyf, 1));
-                            Triplets.push_back(Trp(kyf, kyf - Ny1 * 6, -1));
+                            Trip.push_back(Trp(kyf, kyf, 1));
+                            Trip.push_back(Trp(kyf, kyf - Ny1 * 6, -1));
                             R(kyf) = 0;
-                            access += 2;
                         }
                         
                         // Upper boundary: no penetration
                         if (i == 0) {
-                            Triplets.push_back(Trp(kyf, kyf, 1));
+                            Trip.push_back(Trp(kyf, kyf, 1));
                             R(kyf) = bcvyflower;
-                            access++;
                         }
                         
                         // Lower boundary: no penetration
                         if (i == Ny - 1) {
-                            Triplets.push_back(Trp(kyf, kyf, 1));
+                            Trip.push_back(Trp(kyf, kyf, 1));
                             R(kyf) = bcvyflower;
-                            access++;
                         }
                     } else {
                         // Fluid Y - Darsi:  - ETAfluid / K * VyD - dPf / dy = -RHOf * gy + RHOf * DVys / Dt
@@ -1394,11 +1362,10 @@ int main() {
                         //   Pf2
                         //
                         // Left part
-                        Triplets.push_back(Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * ascale / dt)); //vyD
-                        Triplets.push_back(Trp(kyf, ky, -RHOFY(i, j) * ascale / dt)); //vys
-                        Triplets.push_back(Trp(kyf, kpf, pfscale / dy)); //Pf1'
-                        Triplets.push_back(Trp(kyf, kpf + 6, -pfscale / dy)); //Pf2'
-                        access += 4;
+                        Trip.push_back(Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * ascale / dt)); //vyD
+                        Trip.push_back(Trp(kyf, ky, -RHOFY(i, j) * ascale / dt)); //vys
+                        Trip.push_back(Trp(kyf, kpf, pfscale / dy)); //Pf1'
+                        Trip.push_back(Trp(kyf, kpf + 6, -pfscale / dy)); //Pf2'
                         // Right part
                         R(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
                     }
@@ -1408,14 +1375,12 @@ int main() {
                         // BC equation: 1 * Pf = 0
                         // Real BC
                         if (i == 1 || i == Ny - 1) {
-                            Triplets.push_back(Trp(kpf, kpf, pfscale));
-                            Triplets.push_back(Trp(kpf, kp, -ptscale));
+                            Trip.push_back(Trp(kpf, kpf, pfscale));
+                            Trip.push_back(Trp(kpf, kp, -ptscale));
                             R(kpf) = -PTFDIFF;
-                            access += 2;
                         } else {
-                            Triplets.push_back(Trp(kpf, kpf, 1));
+                            Trip.push_back(Trp(kpf, kpf, 1));
                             R(kpf) = 0;
-                            access++;
                         }
                     } else {
                         // Fluid Continuity: dVxD / dx + dVyD / dy - (Pt - Pf) / ETAbulk = 0
@@ -1432,20 +1397,18 @@ int main() {
                         // Skempton koefficient
                         KSK = (BETADRAINED - BETASOLID) / (BETADRAINED - BETASOLID + POR(i, j) * (BETAFLUID - BETASOLID));
                         // Left part
-                        Triplets.push_back(Trp(kpf, kxf - Ny1 * 6, -1. / dx)); //vxs1
-                        Triplets.push_back(Trp(kpf, kxf, 1. / dx)); //vxs2
-                        Triplets.push_back(Trp(kpf, kyf - 6, -1. / dy)); //vys1
-                        Triplets.push_back(Trp(kpf, kyf, 1. / dy)); //vys2
-                        Triplets.push_back(Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))); //Pt
-                        Triplets.push_back(Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))); //Pf
-                        access += 6;
+                        Trip.push_back(Trp(kpf, kxf - Ny1 * 6, -1. / dx)); //vxs1
+                        Trip.push_back(Trp(kpf, kxf, 1. / dx)); //vxs2
+                        Trip.push_back(Trp(kpf, kyf - 6, -1. / dy)); //vys1
+                        Trip.push_back(Trp(kpf, kyf, 1. / dy)); //vys2
+                        Trip.push_back(Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))); //Pt
+                        Trip.push_back(Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))); //Pf
                         // Right part
                         R(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1. / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
                 }
             }
 
-            cout << "accesses:    " << access << endl;
 
             auto stop_iterstep_3 = hrc::now();
 
@@ -1457,7 +1420,7 @@ int main() {
             auto start = hrc::now();
 
             SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
-            L.setFromTriplets(Triplets.begin(), Triplets.end());
+            L.setFromTriplets(Trip.begin(), Trip.end());
             // 6) Solving matrix
             PardisoLU<SparseMatrix<double>> solver;
             L.makeCompressed();
