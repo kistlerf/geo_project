@@ -381,49 +381,26 @@ MatXd VIS_COMP(Ny1, Nx1);
 // (3) Defining global matrixes
 // according to the global number of unknowns
 // Sparse Matrix L is not yet defined as it will be built from a set of Triplets each step
+int kp, kx, ky, kpf, kxf, kyf; // this could maybe be made into a vector
 VecXd R(N); // Vector of the right parts of equations
 VecXd S(N);
 
 // variable type declaration
-double cohescmm, cohestmm, frictcmm, dilatcmm, fricttmm, etasmm0, etamm0, etamm, rhomm, etadm, dxm, dym, wtmij, wtmi1j, wtmij1, wtmi1j1;
-
-double dt00, etamincur;
-
 int ynlast;
 
-double KXX, IETAPL, BETADRAINED, KBW, KSK, KXY;
-
-double pfscale, ptscale;
-
-int kp, kx, ky, kpf, kxf, kyf; // this could maybe be made into a vector
-
-double ETAXY1, ETAXY2, ETAXX1, ETAXX2, ETAYY1, ETAYY2, GXY1, GXY2, GXX1, GXX2, GYY1, GYY2, KXY1, KXY2, KXX1, KXX2, KYY1, KYY2, SXY1, SXY2, SXX1, SXX2, SYY1, SYY2;
-
+double cohescmm, cohestmm, frictcmm, dilatcmm, fricttmm, etasmm0, etamm0, etamm, rhomm, etadm, dxm, dym, wtmij, wtmi1j, wtmij1, wtmi1j1;
+double dt0, dt00, dtx, dty, dtlapusta;
+double etamincur, dTETAmax, etapl, IETAPL, ETAPL, ETAVP;
+double KXX, KXY, KBW, KSK, BETADRAINED;
+double pfscale, ptscale, avgpt, diffpt, PT0_ave, PF0_ave, ptB, pfB, prB;
+double ETAXY1, ETAXY2, ETAXX1, ETAXX2, ETAYY1, ETAYY2, GXY1, GXY2, GXX1, GXX2, GYY1, GYY2, KXY1, KXY2, KXX1, KXX2, KYY1, KYY2, SXY1, SXY2, SXX1, SXX2, SYY1, SYY2, EXY2, EXYVP2, DISXY, EXY1;
 double dRHOdx, dRHOdy;
-
-double Vmax;
-
-double SIIB1, SIIB2, SIIB3, SIIB4, SIIB5;
-
-double avgpt, diffpt;
-
-double dt0;
-
-double EXY2, EXYVP2, DISXY;
-
-double ptB, pfB, prB;
-double kfxy, siiel, kfxy0, SIIB0;
-
-double V, EIISLIP, ETAPL, ETAVP, kfxy1, DSIIB1, DSIIB2;
-
-double syield, SIGMA2, etapl, dTETAmax, maxvxy;
-
-double dtx, dty, dtlapusta;
-
-double EXY1, PT0_ave, PF0_ave;
+double V, Vmax, maxvxy;
+double SIIB0, SIIB1, SIIB2, SIIB3, SIIB4, SIIB5, DSIIB1, DSIIB2, EIISLIP;
+double kfxy, kfxy1, kfxy0;
+double syield, siiel, SIGMA2;
 
 VecXd vxm(4), vym(4), spm(4);
-
 VecXd DSYLSQ(niterglobal);
 
 MatXd DVX0(Ny1, Nx1);
@@ -1010,8 +987,7 @@ int main() {
                     GGGB(i, j) = GGGP(i, j) / POR(i, j);
                     // Dilation
                     // Zhao and Cai, International Journal of Rock Mechanics & Mining Sciences 47 (2010) 368–384
-                    // Weak sandstone parameters 
-                    
+                    // Weak sandstone parameters
                     ss3 = min(max((pt(i, j) - pf(i, j)) * 1e-6, 0.), 100.); // SIGMA3, MPa
                     aa = aa1 + aa2 * exp(-ss3 / aa3);
                     bb = bb1 + bb2 * exp(-ss3 / bb3);
