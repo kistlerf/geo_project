@@ -958,14 +958,8 @@ int main() {
             etamincur = shearmod * dt * 1e-4;
             
             // External P - nodes: symmetry
-            pt.col(0) = pt.col(1);
-            pt.col(Nx) = pt.col(Nx - 1);
-            pt.row(0) = pt.row(1);
-            pt.row(Ny) = pt.row(Ny - 1);
-            pf.col(0) = pf.col(1);
-            pf.col(Nx) = pf.col(Nx - 1);
-            pf.row(0) = pf.row(1);
-            pf.row(Ny) = pf.row(Ny - 1); 
+            copy_bounds(pt);
+            copy_bounds(pf);
             
             // Basic nodes
             for (int i = 0; i < Ny; i++) {
@@ -975,7 +969,7 @@ int main() {
                     if (ETA(i, j) < ETA0(i, j)) {
                         double SXX_tot_4 = (SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1)) / 4.;
                         double SYY_tot_4 = (SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1)) / 4.;
-                        SIIB(i, j) = sqrt(pow(SXY_vec(i, j), 2) + .5 * pow(SXX_tot_4, 2) + .5 * pow(SYY_tot_4, 2) + .5 * pow(-SXX_tot_4 - SYY_tot_4, 2));
+                        SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow(SXX_tot_4, 2) + .5 * pow(SYY_tot_4, 2) + .5 * pow(-SXX_tot_4 - SYY_tot_4, 2));
                         EIIB(i, j) = dy / faultwidth * (SIIB(i, j) / 2. / ETA(i, j) - SIIB(i, j) / 2. / ETA0(i, j));
                         IETAPLB(i, j) = (1. / ETA(i, j) - 1. / ETA0(i, j));
                     } else {
@@ -984,7 +978,7 @@ int main() {
                     }
                 }
             }
-            
+
             // Computing viscosity and dilatation in pressure nodes
             for (int i = 1; i < Ny; i++) {
                 for (int j = 1; j < Nx; j++) {
