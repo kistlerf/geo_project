@@ -57,6 +57,9 @@ using namespace Eigen;
 using namespace std::chrono;
 
 typedef Triplet<double> Trp;
+typedef high_resolution_clock hrc;
+typedef VectorXd VecXd;
+typedef MatrixXd MatXd;
 
 // ====================================================================================
 // global variable declarations
@@ -103,14 +106,14 @@ const double ybeg = 0;
 const double yend = ysize;
 
 // define type and replace : operator
-VectorXd x = VectorXd::LinSpaced(Nx, xbeg, xend); // horizontal coordinates of basic grid points
-VectorXd y = VectorXd::LinSpaced(Ny, ybeg, yend); // vertical coordinates of basic grid points
-VectorXd xvx = VectorXd::LinSpaced(Nx1, xbeg, xend + dx); // Horizontal coordinates of Vx - nodes
-VectorXd yvx = VectorXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
-VectorXd xvy = VectorXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal coordinates of Vy - nodes
-VectorXd yvy = VectorXd::LinSpaced(Ny1, ybeg, yend + dy); // Vertical coordinates of Vy - nodes
-VectorXd xp = VectorXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal coordinates of P - nodes
-VectorXd yp = VectorXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
+VecXd x = VecXd::LinSpaced(Nx, xbeg, xend); // horizontal coordinates of basic grid points
+VecXd y = VecXd::LinSpaced(Ny, ybeg, yend); // vertical coordinates of basic grid points
+VecXd xvx = VecXd::LinSpaced(Nx1, xbeg, xend + dx); // Horizontal coordinates of Vx - nodes
+VecXd yvx = VecXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
+VecXd xvy = VecXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal coordinates of Vy - nodes
+VecXd yvy = VecXd::LinSpaced(Ny1, ybeg, yend + dy); // Vertical coordinates of Vy - nodes
+VecXd xp = VecXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal coordinates of P - nodes
+VecXd yp = VecXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
 
 //               Block  Fault
 Vector2d arsfm = {.03,  .009}; // a - parameter of RSF
@@ -191,7 +194,7 @@ const int Nx_markers = (Nx - 1) * 4; // Marker resolution in x - dection
 const int Ny_markers = (Ny - 1) * 4; // Marker resolution in y direction
 const double dxms = xsize / (double)Nx_markers; // Standard marker horizontal step
 const double dyms = ysize / (double)Ny_markers; // Standard marker vertical step
-const int marknum = Nx_markers * Ny_markers; // Total number of markers
+const int m_num = Nx_markers * Ny_markers; // Total number of markers
 
 // These variables are only used once and could be inserted directly as numbers
 const double aa1 = 20.93, aa2 = 35.28, aa3 = 2.34;
@@ -208,178 +211,178 @@ double dilij;
 const double pi = M_PI;
 
 // Basic nodes
-MatrixXd OM0(Ny, Nx);    // Old state parameter
-MatrixXd OM(Ny, Nx);     // State parameter
-MatrixXd OM5(Ny, Nx);
-MatrixXd ARSF(Ny, Nx); // a - parameter of RSF
-MatrixXd BRSF(Ny, Nx); // b - parameter of RSF
-MatrixXd LRSF(Ny, Nx); // L - parameter of RSF
+MatXd OM0(Ny, Nx);    // Old state parameter
+MatXd OM(Ny, Nx);     // State parameter
+MatXd OM5(Ny, Nx);
+MatXd ARSF(Ny, Nx); // a - parameter of RSF
+MatXd BRSF(Ny, Nx); // b - parameter of RSF
+MatXd LRSF(Ny, Nx); // L - parameter of RSF
 
 // Unknown parameters
-MatrixXd pt(Ny1, Nx1);  // Total pressure
-MatrixXd vxs(Ny1, Nx1); // Solid vx - velocity
-MatrixXd vys(Ny1, Nx1); // Solid vy - velocity
-MatrixXd pf(Ny1, Nx1);  // Fluid pressure
-MatrixXd vxD(Ny1, Nx1); // Darsi vx - velocity
-MatrixXd vyD(Ny1, Nx1); // Darsi vy - velocity
+MatXd pt(Ny1, Nx1);  // Total pressure
+MatXd vxs(Ny1, Nx1); // Solid vx - velocity
+MatXd vys(Ny1, Nx1); // Solid vy - velocity
+MatXd pf(Ny1, Nx1);  // Fluid pressure
+MatXd vxD(Ny1, Nx1); // Darsi vx - velocity
+MatXd vyD(Ny1, Nx1); // Darsi vy - velocity
 
 // Nodal arrays
 // Basic nodes
-MatrixXd RHO(Ny, Nx);
-MatrixXd ETA(Ny, Nx);
-MatrixXd ETA0(Ny, Nx);
-MatrixXd ETA1(Ny, Nx);
-MatrixXd ETA5(Ny, Nx);
-MatrixXd ETA50(Ny, Nx);
-MatrixXd ETA00(Ny, Nx);
-MatrixXd IETAPLB(Ny, Nx);
-MatrixXd SXY(Ny, Nx);
-MatrixXd SXY0(Ny, Nx);
-MatrixXd YNY0(Ny, Nx);
-MatrixXd YNY00(Ny, Nx);
-MatrixXd KKK(Ny, Nx);
-MatrixXd GGG(Ny, Nx);
-MatrixXd COHC(Ny, Nx);
-MatrixXd COHT(Ny, Nx);
-MatrixXd FRIC(Ny, Nx);
-MatrixXd FRIT(Ny, Nx);
-MatrixXd DILC(Ny, Nx);
-MatrixXd TTT(Ny, Nx);
-MatrixXd EIIB(Ny, Nx);
-MatrixXd STRPLB(Ny, Nx);
+MatXd RHO(Ny, Nx);
+MatXd ETA(Ny, Nx);
+MatXd ETA0(Ny, Nx);
+MatXd ETA1(Ny, Nx);
+MatXd ETA5(Ny, Nx);
+MatXd ETA50(Ny, Nx);
+MatXd ETA00(Ny, Nx);
+MatXd IETAPLB(Ny, Nx);
+MatXd SXY(Ny, Nx);
+MatXd SXY0(Ny, Nx);
+MatXd YNY0(Ny, Nx);
+MatXd YNY00(Ny, Nx);
+MatXd KKK(Ny, Nx);
+MatXd GGG(Ny, Nx);
+MatXd COHC(Ny, Nx);
+MatXd COHT(Ny, Nx);
+MatXd FRIC(Ny, Nx);
+MatXd FRIT(Ny, Nx);
+MatXd DILC(Ny, Nx);
+MatXd TTT(Ny, Nx);
+MatXd EIIB(Ny, Nx);
+MatXd STRPLB(Ny, Nx);
 
 // Pressure nodes
-MatrixXd ETAB(Ny1, Nx1);
-MatrixXd ETAB0(Ny1, Nx1);
-MatrixXd ETAP(Ny1, Nx1);
-MatrixXd ETAP0(Ny1, Nx1);
-MatrixXd POR(Ny1, Nx1);
-MatrixXd GGGP(Ny1, Nx1);
-MatrixXd GGGB(Ny1, Nx1);
-MatrixXd PTF0(Ny1, Nx1);
-MatrixXd PT0(Ny1, Nx1);
-MatrixXd PF0(Ny1, Nx1);
-MatrixXd pt_ave(Ny1, Nx1);
-MatrixXd pf_ave(Ny1, Nx1);
-MatrixXd SXX(Ny1, Nx1);
-MatrixXd SXX0(Ny1, Nx1);
-MatrixXd SYY(Ny1, Nx1);
-MatrixXd SYY0(Ny1, Nx1);
-MatrixXd DILP(Ny1, Nx1);
+MatXd ETAB(Ny1, Nx1);
+MatXd ETAB0(Ny1, Nx1);
+MatXd ETAP(Ny1, Nx1);
+MatXd ETAP0(Ny1, Nx1);
+MatXd POR(Ny1, Nx1);
+MatXd GGGP(Ny1, Nx1);
+MatXd GGGB(Ny1, Nx1);
+MatXd PTF0(Ny1, Nx1);
+MatXd PT0(Ny1, Nx1);
+MatXd PF0(Ny1, Nx1);
+MatXd pt_ave(Ny1, Nx1);
+MatXd pf_ave(Ny1, Nx1);
+MatXd SXX(Ny1, Nx1);
+MatXd SXX0(Ny1, Nx1);
+MatXd SYY(Ny1, Nx1);
+MatXd SYY0(Ny1, Nx1);
+MatXd DILP(Ny1, Nx1);
 // Vx nodes
-MatrixXd RHOX(Ny1, Nx1);
-MatrixXd RHOFX(Ny1, Nx1);
-MatrixXd ETADX(Ny1, Nx1);
-MatrixXd PORX(Ny1, Nx1);
-MatrixXd VX0(Ny1, Nx1);
-MatrixXd VXF0(Ny1, Nx1);
+MatXd RHOX(Ny1, Nx1);
+MatXd RHOFX(Ny1, Nx1);
+MatXd ETADX(Ny1, Nx1);
+MatXd PORX(Ny1, Nx1);
+MatXd VX0(Ny1, Nx1);
+MatXd VXF0(Ny1, Nx1);
 // Vy nodes
-MatrixXd RHOY(Ny1, Nx1);
-MatrixXd RHOFY(Ny1, Nx1);
-MatrixXd ETADY(Ny1, Nx1);
-MatrixXd PORY(Ny1, Nx1);
-MatrixXd VY0(Ny1, Nx1);
-MatrixXd VYF0(Ny1, Nx1);
+MatXd RHOY(Ny1, Nx1);
+MatXd RHOFY(Ny1, Nx1);
+MatXd ETADY(Ny1, Nx1);
+MatXd PORY(Ny1, Nx1);
+MatXd VY0(Ny1, Nx1);
+MatXd VYF0(Ny1, Nx1);
 
-MatrixXd VSLIPB(Ny, Nx);
+MatXd VSLIPB(Ny, Nx);
 
 // Lagrangian solid markers
-VectorXd rhom(marknum);         // Density of solid
-VectorXd etasm(marknum);        // Standard shear viscosity of bulk
-VectorXd etam(marknum);         // Shear viscosity of bulk
-VectorXd etabm(marknum);        // Bulk viscosity of bulk
-VectorXd cohescm(marknum);      // Cohesion for confined fracture of solid
-VectorXd frictcm(marknum);      // friction for confined fracture of solid
-VectorXd dilatcm(marknum);      // dilatation for confined fracture of solid
-VectorXd cohestm(marknum);      // Cohesion for tensile fracture of solid
-VectorXd fricttm(marknum);      // friction for tensile fracture of solid
-VectorXd porm(marknum);         // Porosity of solid
-VectorXd kkkm(marknum);         // Standard permeability of solid
-VectorXd rhofm(marknum);        // Density of fluid
-VectorXd etafm(marknum);        // Viscosity of fluid
-VectorXd t_marker(marknum);     // Marker rock type
-VectorXd xm(marknum);           // Horizontal coordinates of solid markers
-VectorXd ym(marknum);           // Vertical coordinates of solid markers
-VectorXd sxxm(marknum);         // Marker SIGMAxx', Pa
-VectorXd syym(marknum);         // Marker SIGMAyy', Pa
-VectorXd sxym(marknum);         // Marker SIGMAxy', Pa
-VectorXd gsm(marknum);          // Standard shear modulus of bulk, Pa
-VectorXd gm(marknum);           // Shear modulus of bulk, Pa
-VectorXd vx0m(marknum);         // Marker horizontal velocity
-VectorXd vy0m(marknum);         // Marker vertical velocity
-VectorXd ptfm(marknum);         // Pt - Pf, Pa
-VectorXd amursfm(marknum);      // RSF a / mu parameter
+VecXd rhom(m_num);         // Density of solid
+VecXd etasm(m_num);        // Standard shear viscosity of bulk
+VecXd etam(m_num);         // Shear viscosity of bulk
+VecXd etabm(m_num);        // Bulk viscosity of bulk
+VecXd cohescm(m_num);      // Cohesion for confined fracture of solid
+VecXd frictcm(m_num);      // friction for confined fracture of solid
+VecXd dilatcm(m_num);      // dilatation for confined fracture of solid
+VecXd cohestm(m_num);      // Cohesion for tensile fracture of solid
+VecXd fricttm(m_num);      // friction for tensile fracture of solid
+VecXd porm(m_num);         // Porosity of solid
+VecXd kkkm(m_num);         // Standard permeability of solid
+VecXd rhofm(m_num);        // Density of fluid
+VecXd etafm(m_num);        // Viscosity of fluid
+VecXd t_marker(m_num);     // Marker rock type
+VecXd xm(m_num);           // Horizontal coordinates of solid markers
+VecXd ym(m_num);           // Vertical coordinates of solid markers
+VecXd sxxm(m_num);         // Marker SIGMAxx', Pa
+VecXd syym(m_num);         // Marker SIGMAyy', Pa
+VecXd sxym(m_num);         // Marker SIGMAxy', Pa
+VecXd gsm(m_num);          // Standard shear modulus of bulk, Pa
+VecXd gm(m_num);           // Shear modulus of bulk, Pa
+VecXd vx0m(m_num);         // Marker horizontal velocity
+VecXd vy0m(m_num);         // Marker vertical velocity
+VecXd ptfm(m_num);         // Pt - Pf, Pa
+VecXd amursfm(m_num);      // RSF a / mu parameter
 
 // declaration of matrices that are set to zero each timestep
-MatrixXd ETA0SUM(Ny, Nx);
-MatrixXd COHCSUM(Ny, Nx);
-MatrixXd FRICSUM(Ny, Nx);
-MatrixXd DILCSUM(Ny, Nx);
-MatrixXd COHTSUM(Ny, Nx);
-MatrixXd FRITSUM(Ny, Nx);
-MatrixXd WTSUM(Ny, Nx);
+MatXd ETA0SUM(Ny, Nx);
+MatXd COHCSUM(Ny, Nx);
+MatXd FRICSUM(Ny, Nx);
+MatXd DILCSUM(Ny, Nx);
+MatXd COHTSUM(Ny, Nx);
+MatXd FRITSUM(Ny, Nx);
+MatXd WTSUM(Ny, Nx);
 
 // Interpolate ETA, RHO to nodal points
 // Basic nodes
-MatrixXd RHOSUM(Ny, Nx);
-MatrixXd ETASUM(Ny, Nx);
-MatrixXd KKKSUM(Ny, Nx);
-MatrixXd TTTSUM(Ny, Nx);
-MatrixXd SXYSUM(Ny, Nx);
-MatrixXd GGGSUM(Ny, Nx);
+MatXd RHOSUM(Ny, Nx);
+MatXd ETASUM(Ny, Nx);
+MatXd KKKSUM(Ny, Nx);
+MatXd TTTSUM(Ny, Nx);
+MatXd SXYSUM(Ny, Nx);
+MatXd GGGSUM(Ny, Nx);
 
 //LDZ
-MatrixXd OM0SUM(Ny, Nx); // Old state parameter
-MatrixXd OMSUM(Ny, Nx); // State parameter
-MatrixXd ARSFSUM(Ny, Nx); // a - parameter of RSF
-MatrixXd BRSFSUM(Ny, Nx); // b - parameter of RSF
-MatrixXd LRSFSUM(Ny, Nx); // L - parameter of RSF
+MatXd OM0SUM(Ny, Nx); // Old state parameter
+MatXd OMSUM(Ny, Nx); // State parameter
+MatXd ARSFSUM(Ny, Nx); // a - parameter of RSF
+MatXd BRSFSUM(Ny, Nx); // b - parameter of RSF
+MatXd LRSFSUM(Ny, Nx); // L - parameter of RSF
 
 // Pressure nodes
-MatrixXd ETAPSUM(Ny1, Nx1);
-MatrixXd ETAP0SUM(Ny1, Nx1);
-MatrixXd ETAB0SUM(Ny1, Nx1);
-MatrixXd PORSUM(Ny1, Nx1);
-MatrixXd SXXSUM(Ny1, Nx1);
-MatrixXd SYYSUM(Ny1, Nx1);
-MatrixXd GGGPSUM(Ny1, Nx1);
-MatrixXd WTPSUM(Ny1, Nx1);
+MatXd ETAPSUM(Ny1, Nx1);
+MatXd ETAP0SUM(Ny1, Nx1);
+MatXd ETAB0SUM(Ny1, Nx1);
+MatXd PORSUM(Ny1, Nx1);
+MatXd SXXSUM(Ny1, Nx1);
+MatXd SYYSUM(Ny1, Nx1);
+MatXd GGGPSUM(Ny1, Nx1);
+MatXd WTPSUM(Ny1, Nx1);
 // Vx nodes
-MatrixXd RHOXSUM(Ny1, Nx1);
-MatrixXd RHOFXSUM(Ny1, Nx1);
-MatrixXd ETADXSUM(Ny1, Nx1);
-MatrixXd PORXSUM(Ny1, Nx1);
-MatrixXd VX0SUM(Ny1, Nx1);
-MatrixXd WTXSUM(Ny1, Nx1);
+MatXd RHOXSUM(Ny1, Nx1);
+MatXd RHOFXSUM(Ny1, Nx1);
+MatXd ETADXSUM(Ny1, Nx1);
+MatXd PORXSUM(Ny1, Nx1);
+MatXd VX0SUM(Ny1, Nx1);
+MatXd WTXSUM(Ny1, Nx1);
 // Vy nodes
-MatrixXd RHOYSUM(Ny1, Nx1);
-MatrixXd RHOFYSUM(Ny1, Nx1);
-MatrixXd ETADYSUM(Ny1, Nx1);
-MatrixXd PORYSUM(Ny1, Nx1);
-MatrixXd VY0SUM(Ny1, Nx1);
-MatrixXd WTYSUM(Ny1, Nx1);
+MatXd RHOYSUM(Ny1, Nx1);
+MatXd RHOFYSUM(Ny1, Nx1);
+MatXd ETADYSUM(Ny1, Nx1);
+MatXd PORYSUM(Ny1, Nx1);
+MatXd VY0SUM(Ny1, Nx1);
+MatXd WTYSUM(Ny1, Nx1);
 
-MatrixXd ESP(Ny, Nx);
-MatrixXd EXY(Ny, Nx);
-MatrixXd DSXY(Ny, Nx);
-MatrixXd EXX(Ny1, Nx1);
-MatrixXd DSXX(Ny1, Nx1);
-MatrixXd EYY(Ny1, Nx1);
-MatrixXd DSYY(Ny1, Nx1);
-MatrixXd EII(Ny1, Nx1);
-MatrixXd EIIVP(Ny1, Nx1);
-MatrixXd SII(Ny1, Nx1);
-MatrixXd DSII(Ny1, Nx1);
-MatrixXd DIS(Ny1, Nx1);
+MatXd ESP(Ny, Nx);
+MatXd EXY(Ny, Nx);
+MatXd DSXY(Ny, Nx);
+MatXd EXX(Ny1, Nx1);
+MatXd DSXX(Ny1, Nx1);
+MatXd EYY(Ny1, Nx1);
+MatXd DSYY(Ny1, Nx1);
+MatXd EII(Ny1, Nx1);
+MatXd EIIVP(Ny1, Nx1);
+MatXd SII(Ny1, Nx1);
+MatXd DSII(Ny1, Nx1);
+MatXd DIS(Ny1, Nx1);
 
-MatrixXd EL_DECOM(Ny1, Nx1);   // Elastic (de)compaction
-MatrixXd VIS_COMP(Ny1, Nx1);
+MatXd EL_DECOM(Ny1, Nx1);   // Elastic (de)compaction
+MatXd VIS_COMP(Ny1, Nx1);
 
 // (3) Defining global matrixes
 // according to the global number of unknowns
 // Sparse Matrix L is not yet defined as it will be built from a set of Triplets each step
-VectorXd R(N); // Vector of the right parts of equations
-VectorXd S(N);
+VecXd R(N); // Vector of the right parts of equations
+VecXd S(N);
 
 // variable type declaration
 double cohescmm, cohestmm, frictcmm, dilatcmm, fricttmm, etasmm0, etamm0, etamm, rhomm, etadm, dxm, dym, wtmij, wtmi1j, wtmij1, wtmi1j1;
@@ -394,7 +397,7 @@ double pfscale, ptscale;
 
 int kp, kx, ky, kpf, kxf, kyf;
 
-VectorXd ETAXY(6), GXY(6), KXY_vec(6), SXY_vec(6);
+VecXd ETAXY(6), GXY(6), KXY_vec(6), SXY_vec(6);
 
 double dRHOdx, dRHOdy;
 
@@ -419,27 +422,27 @@ double dtx, dty, dtlapusta;
 
 double EXY1, PT0_ave, PF0_ave;
 
-VectorXd vxm(4), vym(4), spm(4);
+VecXd vxm(4), vym(4), spm(4);
 
-VectorXd DSYLSQ(niterglobal);
+VecXd DSYLSQ(niterglobal);
 
-MatrixXd DVX0(Ny1, Nx1);
-MatrixXd DVY0(Ny1, Nx1);
+MatXd DVX0(Ny1, Nx1);
+MatXd DVY0(Ny1, Nx1);
 
-MatrixXd AXY(Ny, Nx);
-MatrixXd DSY(Ny, Nx);
-MatrixXd YNY(Ny, Nx);
-MatrixXd SigmaY(Ny, Nx);
-MatrixXd SII_fault(Ny, Nx);
+MatXd AXY(Ny, Nx);
+MatXd DSY(Ny, Nx);
+MatXd YNY(Ny, Nx);
+MatXd SigmaY(Ny, Nx);
+MatXd SII_fault(Ny, Nx);
 
-MatrixXd SIIB(Ny, Nx);
+MatXd SIIB(Ny, Nx);
 
-VectorXd timesumcur(num_timesteps);
-VectorXd dtcur(num_timesteps);
-VectorXd maxvxsmod(num_timesteps);
-VectorXd minvxsmod(num_timesteps);
-VectorXd maxvysmod(num_timesteps);
-VectorXd minvysmod(num_timesteps);
+VecXd timesumcur(num_timesteps);
+VecXd dtcur(num_timesteps);
+VecXd maxvxsmod(num_timesteps);
+VecXd minvxsmod(num_timesteps);
+VecXd maxvysmod(num_timesteps);
+VecXd minvysmod(num_timesteps);
 
 // ====================================================================================
 // end global variable declarations
@@ -468,7 +471,7 @@ int check_bounds(int k, int bound) {
     return k;
 }
 
-void copy_bounds (MatrixXd& Temp) {
+void copy_bounds (MatXd& Temp) {
     Temp.col(0) = Temp.col(1);
     Temp.col(Nx) = Temp.col(Nx - 1);
     Temp.row(0) = Temp.row(1);
@@ -499,10 +502,10 @@ int main() {
     } else {
         timestep = 1;
         // Basic nodes
-        OM0 = MatrixXd::Constant(Ny, Nx, omm(0));    // Old state parameter
-        ARSF = MatrixXd::Constant(Ny, Nx, arsfm(0)); // a - parameter of RSF
-        BRSF = MatrixXd::Constant(Ny, Nx, brsfm(0)); // b - parameter of RSF
-        LRSF = MatrixXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
+        OM0 = MatXd::Constant(Ny, Nx, omm(0));    // Old state parameter
+        ARSF = MatXd::Constant(Ny, Nx, arsfm(0)); // a - parameter of RSF
+        BRSF = MatXd::Constant(Ny, Nx, brsfm(0)); // b - parameter of RSF
+        LRSF = MatXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
         
         // Unknown parameters
         pt.setZero();  // Total pressure
@@ -565,8 +568,8 @@ int main() {
         GGGP.setZero();
         GGGB.setZero();
         PTF0.setZero();
-        PT0 = MatrixXd::Constant(Ny1, Nx1, PCONF + PTFDIFF);
-        PF0 = MatrixXd::Constant(Ny1, Nx1, PCONF);
+        PT0 = MatXd::Constant(Ny1, Nx1, PCONF + PTFDIFF);
+        PF0 = MatXd::Constant(Ny1, Nx1, PCONF);
         pt_ave.setZero();
         pf_ave.setZero();
         SXX.setZero();
@@ -618,18 +621,18 @@ int main() {
         ptfm.setZero();        // Pt - Pf, Pa
         amursfm.setZero();     // RSF a / mu parameter
 
-        t_marker = VectorXd::Constant(marknum, 1);
-        rhom = VectorXd::Constant(marknum, 3000);
-        etasm = VectorXd::Constant(marknum, 1e22);
-        gsm = VectorXd::Constant(marknum, shearmod);
-        cohescm = VectorXd::Constant(marknum, cohes);
-        cohestm = VectorXd::Constant(marknum, cohes);
-        frictcm = VectorXd::Constant(marknum, friction);
-        dilatcm = VectorXd::Constant(marknum, dilatation);
-        fricttm = VectorXd::Constant(marknum, tensile);
-        kkkm = VectorXd::Constant(marknum, 5e-16); // * (dy / faultwidth)^2;
-        rhofm = VectorXd::Constant(marknum, 1000);
-        etafm = VectorXd::Constant(marknum, 1e-3);
+        t_marker = VecXd::Constant(m_num, 1);
+        rhom = VecXd::Constant(m_num, 3000);
+        etasm = VecXd::Constant(m_num, 1e22);
+        gsm = VecXd::Constant(m_num, shearmod);
+        cohescm = VecXd::Constant(m_num, cohes);
+        cohestm = VecXd::Constant(m_num, cohes);
+        frictcm = VecXd::Constant(m_num, friction);
+        dilatcm = VecXd::Constant(m_num, dilatation);
+        fricttm = VecXd::Constant(m_num, tensile);
+        kkkm = VecXd::Constant(m_num, 5e-16); // * (dy / faultwidth)^2;
+        rhofm = VecXd::Constant(m_num, 1000);
+        etafm = VecXd::Constant(m_num, 1e-3);
 
         gm = gsm; // * (1 - porm(m));
         
@@ -719,7 +722,7 @@ int main() {
         WTYSUM.setZero();
 
         // Cycle on markers
-        for (int m = 0; m < marknum; m++) {
+        for (int m = 0; m < m_num; m++) {
             
             // Marker properties
             double kkkmm = kkkm(m) * pow(porm(m) / POR0, 3);
@@ -952,7 +955,7 @@ int main() {
         
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
             
-            auto start_iterstep = high_resolution_clock::now();
+            auto start_iterstep = hrc::now();
 
             // Limiting viscosity
             etamincur = shearmod * dt * 1e-4;
@@ -1012,7 +1015,7 @@ int main() {
             
             ptscale = pfscale;
             
-            auto stop_iterstep_4 = high_resolution_clock::now();
+            auto stop_iterstep_4 = hrc::now();
 
             auto duration_iterstep_4 = duration_cast<milliseconds>(stop_iterstep_4 - start_iterstep);
             cout << "Duration of iterstep_4:        " << duration_iterstep_4.count() / 1000. << " seconds" << endl;
@@ -1384,7 +1387,7 @@ int main() {
 
             cout << "\nstart solving LSE" << endl;
             
-            auto start = high_resolution_clock::now();
+            auto start = hrc::now();
 
             SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
             L.setFromTriplets(Trip.begin(), Trip.end());
@@ -1392,14 +1395,14 @@ int main() {
             PardisoLU<SparseMatrix<double>> solver;
             L.makeCompressed();
             solver.analyzePattern(L);
-            auto stop_fact_3 = high_resolution_clock::now();
+            auto stop_fact_3 = hrc::now();
             solver.factorize(L); // Computationally most costly line in the code
 
-            auto stop_fact = high_resolution_clock::now();
+            auto stop_fact = hrc::now();
 
             S = solver.solve(R);
 
-            auto stop = high_resolution_clock::now();
+            auto stop = hrc::now();
 
             auto duration_fact_2 = duration_cast<milliseconds>(stop_fact_3 - start);
             auto duration_fact_3 = duration_cast<milliseconds>(stop_fact - start);
@@ -1409,7 +1412,7 @@ int main() {
             
             cout << "LSE success\n" << endl;
 
-            auto stop_iterstep_3 = high_resolution_clock::now();
+            auto stop_iterstep_3 = hrc::now();
 
             auto duration_iterstep_3 = duration_cast<milliseconds>(stop_iterstep_3 - start_iterstep);
             cout << "Duration of iterstep_3:        " << duration_iterstep_3.count() / 1000. << " seconds" << endl;
@@ -1441,7 +1444,7 @@ int main() {
             if (dt > 1e4 && Vmax < 1e-7) {
                 avgpt = pt.sum() / (double)(pt.rows() * pt.cols()); //calculate average total pressure
                 diffpt = (PCONF + PTFDIFF) - avgpt;
-                pt += MatrixXd::Constant(Ny1, Nx1, diffpt);
+                pt += MatXd::Constant(Ny1, Nx1, diffpt);
             }
             
             // Velocity change
@@ -1551,7 +1554,7 @@ int main() {
             dtlapusta = 1e7;
             OM5 = OM;
 
-            auto stop_iterstep_2 = high_resolution_clock::now();
+            auto stop_iterstep_2 = hrc::now();
 
             auto duration_iterstep_2 = duration_cast<milliseconds>(stop_iterstep_2 - start_iterstep);
             cout << "Duration of iterstep_2:        " << duration_iterstep_2.count() / 1000. << " seconds" << endl;
@@ -1564,11 +1567,7 @@ int main() {
                     if (y(i)  >= upper_block && y(i)  <= lower_block) {
                         for (int j = 0; j < Nx; j++) {
                             // reducing matrix calls
-                            double arsf_temp = ARSF(i, j);
-                            double brsf_temp = BRSF(i, j);
-                            double lrsf_temp = LRSF(i, j);
-                            double fric_temp = FRIC(i, j);
-                            double eta0_temp = ETA0(i, j);
+                            double arsf_temp = ARSF(i, j), brsf_temp = BRSF(i, j), lrsf_temp = LRSF(i, j), fric_temp = FRIC(i, j), eta0_temp = ETA0(i, j);
 
                             double sxx_temp_4 = SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1) / 4.;
                             double syy_temp_4 = SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1) / 4.;
@@ -1717,7 +1716,7 @@ int main() {
                 }
             }
 
-            auto stop_iterstep_1 = high_resolution_clock::now();
+            auto stop_iterstep_1 = hrc::now();
 
             auto duration_iterstep_1 = duration_cast<milliseconds>(stop_iterstep_1 - start_iterstep);
             cout << "Duration of iterstep_1:        " << duration_iterstep_1.count() / 1000. << " seconds" << endl;
@@ -1738,7 +1737,6 @@ int main() {
             if (iterstep != 0) {
                 D_iter_quot = D_iter / DSYLSQ(iterstep - 1);
             }
-            
             
             // Adjust timestep
             double dtpl = dt;
@@ -1842,7 +1840,7 @@ int main() {
                 OM = OM5;
             }
 
-            auto stop_iterstep = high_resolution_clock::now();
+            auto stop_iterstep = hrc::now();
 
             auto duration_iterstep = duration_cast<milliseconds>(stop_iterstep - start_iterstep);
             cout << "Duration of iterstep:        " << duration_iterstep.count() / 1000. << " seconds" << endl;
@@ -1959,7 +1957,7 @@ int main() {
         spm.setZero();
 
         // Move markers by nodal velocity field
-        for (int m = 0; m < marknum; m++) {
+        for (int m = 0; m < m_num; m++) {
             // Save marker position
             double xold = xm(m);
             double yold = ym(m);
@@ -2171,7 +2169,7 @@ int main() {
                 
                 // ========== save effective pressure
                 ofstream out_press_eff("EVO_press_eff.txt", ios_base::app | ios_base::out);
-                MatrixXd P_diff = pt - pf;
+                MatXd P_diff = pt - pf;
                 out_press_eff << timesum << "    " << dt << "    " << P_diff.row(line_fault) << endl; // might be .row() ???
                 out_press_eff.close();
                 
