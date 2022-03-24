@@ -21,22 +21,6 @@ Fluid Continuity: dVxD / dx + dVyD / dy - (Pt - Pf) / ETAbulk = 0
 + P - v formulation
 + advecting material fileds by markers
 ========================================
-
-&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-to do:
-
-1. Change variable names to useful / understandable names
-
-2. Move all variable declarations outside of loops if possible
-
-3. Do calculations outside of loops if possible
-  a) Multiplications of every element can be done at once outside of loop
-  
-4. Remove unnessesary calculations if there are any
-  a) This includes copying variables not needed
-&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 */
 
 #include <iostream>
@@ -44,13 +28,13 @@ to do:
 #include <string>
 #include <vector>
 #include <eigen3/Eigen/Eigen>
-#include <eigen3/Eigen/Sparse> // should be already included with the last include but somehow Euler needs this include too
+#include <eigen3/Eigen/Sparse>
+#include <eigen3/Eigen/PardisoSupport>
 #include <random>
 #include <ctime>
 #include <math.h>
 #include <iomanip>
 #include <chrono>
-#include <eigen3/Eigen/PardisoSupport>
 
 using namespace std;
 using namespace Eigen;
@@ -74,15 +58,15 @@ const int num_timesteps = 10; // very small number for testing
 
 const double xsize = 40000.;      // size in horizontal direction, m
 const double ysize = 10000.;      // size in vertical direction, m
-const int Nx = 161;               // number of grid steps in horizontal directions
-const int Ny = 41;                // number of grid steps in vertical direction
+const int Nx = 401;               // number of grid steps in horizontal directions
+const int Ny = 51;                // number of grid steps in vertical direction
 
 // Where to apply the transition on the left(1) and right(2)
-const double TS_1 = 6e3;
-const double TS_2 = 8e3;
+const double TS_1 = 2e3;
+const double TS_2 = 4e3;
 
 const double TS_3 = 34e3;
-const double TS_4 = 37e3;
+const double TS_4 = 38e3;
 
 // Eulerian Staggered Grid
 const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
@@ -92,7 +76,7 @@ const int N = Nx1 * Ny1 * 6;      // Global number of unknowns
 
 // ========================================
 // Output files
-const bool seismic_cycles_data = true; // unnessesary
+const bool seismic_cycles_data = true;
 int timesum_plus = 0;
 const int line_fault = (Ny - 1) / 2.; 
 
@@ -116,12 +100,12 @@ VecXd xp = VecXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal 
 VecXd yp = VecXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
 
 //               Block  Fault
-Vector2d arsfm = {.03,  .009}; // a - parameter of RSF
-Vector2d brsfm = {.001, .015}; // b - parameter of RSF
-Vector2d lrsfm = {.014, .014}; // L - parameter of RSF (characteristic slip distance)
-Vector2d omm   = {10,  -5   }; // State
-double V0 = 1.e-9;                   // Reference slip velocity of RSF, m / s
-int alpha = 29;                      // Scaling factor for shear viscosity of porous matrix
+Vector2d arsfm = {.025, .006  };   // a - parameter of RSF
+Vector2d brsfm = {.001, .015  };   // b - parameter of RSF
+Vector2d lrsfm = {.020, .0085 };   // L - parameter of RSF (characteristic slip distance)
+Vector2d omm   = {10,   -10   };   // State
+double V0 = 1.e-9;                 // Reference slip velocity of RSF, m / s
+int alpha = 29;                    // Scaling factor for shear viscosity of porous matrix
 
 // ========================================
 const double POR0 = .01; // Standard porosity
@@ -129,7 +113,7 @@ const double POR0 = .01; // Standard porosity
 // ========================================
 // Brittle / plastic rheology
 const double cohes = 0.;     // Cohesion, Pa
-const double friction = .6;     // Internal friction coefficient confined
+const double friction = .6;     // unused variable ???
 const double dilatation = 0.;  // Dilatation coefficient confined
 const double tensile = 1.;      // Internal friction coefficient tensile
 const double shearmod = 3.e10; // Shear modulus
@@ -154,8 +138,8 @@ const double stpmax = 2e-4; // / dy * faultwidth; // Max gridstep fraction for m
 const double stpmax1 = 6e-5; // / dy * faultwidth; // Max gridstep fraction for marker displacement
 
 //Boundary conditions
-const double bcupper = -2e-9;
-const double bclower = 2e-9;
+const double bcupper = -1e-9;
+const double bclower = 1e-9;
 const double bcvyflower = 0;// - 1e-12;
 // bcvxfleft = bcvyflower * xsize / ysize;
 
@@ -168,7 +152,7 @@ const double dtmin = 1e-4;
 const double ascale = 1.;
 
 // Timesteps between visualization frames
-const int savematstep = 300;  // storage periodicity
+const int savestep = 300;  // storage periodicity
 string nname = "h_mec_";  // storage filename
 const int niterglobal = 10000; // Max number of global iterations
 const int ynlastmax = 499; // Max number of iterations without changing timestep
@@ -201,8 +185,7 @@ const double aa1 = 20.93, aa2 = 35.28, aa3 = 2.34;
 const double bb1 = 0.99, bb2 = 44.39, bb3 = 0.73;
 const double cc1 = 0.37, cc2 = 3.54, cc3 = 0.47;
 
-double aa, bb, cc;
-double ss3;
+double aa, bb, cc, ss3;
 
 // Plastic Strain:
 const double gammapij = plstrain * 200;
@@ -404,8 +387,7 @@ double syield, siiel, SIGMA2;
 VecXd vxm(4), vym(4), spm(4);
 VecXd DSYLSQ(niterglobal);
 
-MatXd DVX0(Ny1, Nx1);
-MatXd DVY0(Ny1, Nx1);
+MatXd DVX0(Ny1, Nx1), DVY0(Ny1, Nx1);
 
 MatXd AXY(Ny, Nx);
 MatXd DSY(Ny, Nx);
@@ -417,10 +399,7 @@ MatXd SIIB(Ny, Nx);
 
 VecXd timesumcur(num_timesteps);
 VecXd dtcur(num_timesteps);
-VecXd maxvxsmod(num_timesteps);
-VecXd minvxsmod(num_timesteps);
-VecXd maxvysmod(num_timesteps);
-VecXd minvysmod(num_timesteps);
+VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timesteps), minvysmod(num_timesteps);
 
 // ====================================================================================
 // end global variable declarations
@@ -481,8 +460,8 @@ int main() {
         timestep = 1;
         // Basic nodes
         OM0 = MatXd::Constant(Ny, Nx, omm(0));    // Old state parameter
-        ARSF = MatXd::Constant(Ny, Nx, arsfm(0)); // a - parameter of RSF
-        BRSF = MatXd::Constant(Ny, Nx, brsfm(0)); // b - parameter of RSF
+        ARSF = MatXd::Constant(Ny, Nx, arsfm(1)); // a - parameter of RSF
+        BRSF = MatXd::Constant(Ny, Nx, brsfm(1)); // b - parameter of RSF
         LRSF = MatXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
         
         // Unknown parameters
@@ -519,17 +498,30 @@ int main() {
                 for (int j = 0; j < Nx; j++) {
                     OM0(i, j) = omm(1);
                 
+                    if (x(j) < TS_1) {
+                        BRSF(i, j) = brsfm(0);
+                        ARSF(i, j) = arsfm(0);
+                        LRSF(i, j) = lrsfm(0); // remove line
+                    }
                     if (x(j) >= TS_1 && x(j) < TS_2) {
                         BRSF(i, j) = brsfm(0) - (brsfm(0) - brsfm(1)) * ((x(j) - TS_1) / (TS_2 - TS_1));
                         ARSF(i, j) = arsfm(0) - (arsfm(0) - arsfm(1)) * ((x(j) - TS_1) / (TS_2 - TS_1));
+                        LRSF(i, j) = lrsfm(0) - (lrsfm(0) - lrsfm(1)) * ((x(j) - TS_1) / (TS_2 - TS_1));
                     }
                     if (x(j) >= TS_2 && x(j) <= TS_3) {
-                        BRSF(i, j) = brsfm(1);
-                        ARSF(i, j) = arsfm(1);
+                        BRSF(i, j) = brsfm(1); // remove line
+                        ARSF(i, j) = arsfm(1); // remove line
+                        LRSF(i, j) = lrsfm(1);
                     }
                     if (x(j) > TS_3 && x(j) <= TS_4) {
                         BRSF(i, j) = brsfm(1) - (brsfm(1) - brsfm(0)) * ((x(j) - TS_3) / (TS_4 - TS_3));
                         ARSF(i, j) = arsfm(1) - (arsfm(1) - arsfm(0)) * ((x(j) - TS_3) / (TS_4 - TS_3));
+                        LRSF(i, j) = lrsfm(1) - (lrsfm(1) - lrsfm(0)) * ((x(j) - TS_3) / (TS_4 - TS_3));
+                    }
+                    if (x(j) > TS_4) {
+                        BRSF(i, j) = brsfm(0);
+                        ARSF(i, j) = arsfm(0);
+                        LRSF(i, j) = lrsfm(0); // remove line
                     }
                 }
             }
@@ -600,15 +592,15 @@ int main() {
         amursfm.setZero();     // RSF a / mu parameter
 
         t_marker = VecXd::Constant(marknum, 1);
-        rhom = VecXd::Constant(marknum, 3000);
-        etasm = VecXd::Constant(marknum, 1e22);
+        rhom = VecXd::Constant(marknum, 2800);
+        etasm = VecXd::Constant(marknum, 1e21);
         gsm = VecXd::Constant(marknum, shearmod);
         cohescm = VecXd::Constant(marknum, cohes);
         cohestm = VecXd::Constant(marknum, cohes);
-        frictcm = VecXd::Constant(marknum, friction);
+        frictcm = VecXd::Constant(marknum, .5);
         dilatcm = VecXd::Constant(marknum, dilatation);
         fricttm = VecXd::Constant(marknum, tensile);
-        kkkm = VecXd::Constant(marknum, 5e-16); // * (dy / faultwidth)^2;
+        kkkm = VecXd::Constant(marknum, 2e-16); // * (dy / faultwidth)^2;
         rhofm = VecXd::Constant(marknum, 1000);
         etafm = VecXd::Constant(marknum, 1e-3);
 
@@ -630,11 +622,11 @@ int main() {
                     t_marker(m) = -1;
                     etam(m) = 1e23;
                     etasm(m) = 1e23;
-                    rhom(m) = 3000;
-                    kkkm(m) = 5e-16; // * (dy / faultwidth)^2;  // does not change the value of that variable
+                    rhom(m) = 2800;
+                    kkkm(m) = 2e-16; // * (dy / faultwidth)^2;  // does not change the value of that variable
                     cohescm(m) = cohes * 1e3;
                     cohestm(m) = cohes * 1e3;
-                    frictcm(m) = friction;
+                    frictcm(m) = .8;
                     dilatcm(m) = dilatation;
                     fricttm(m) = tensile;
                 }
@@ -666,7 +658,6 @@ int main() {
         FRITSUM.setZero();
         WTSUM.setZero();
 
-        //LDZ
         OM0SUM.setZero();  // Old state parameter
         OMSUM.setZero();   // State parameter
         ARSFSUM.setZero(); // a - parameter of RSF
@@ -1096,17 +1087,17 @@ int main() {
                         dRHOdy = (RHO(i, j) - RHO(i - 1, j)) / dy;
                         // Left part
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        Trip.push_back(Trp(kx, kx, -4. / 3. * (ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt)); //vxs3
-                        Trip.push_back(Trp(kx, kx - Ny1 * 6, 4. / 3. * ETAXX1 / dx2)); //vxs1
-                        Trip.push_back(Trp(kx, kx + Ny1 * 6, 4. / 3. * ETAXX2 / dx2)); //vxs5
+                        Trip.push_back(Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt)); //vxs3
+                        Trip.push_back(Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2)); //vxs1
+                        Trip.push_back(Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2)); //vxs5
                         Trip.push_back(Trp(kx, kx - 6, ETAXY1 / dy2)); //vxs2
                         Trip.push_back(Trp(kx, kx + 6, ETAXY2 / dy2)); //vxs4
                         double gx_dt_dRHOdy = gx * dt * dRHOdy / 4.;
                         double dx_dy = dx * dy;
-                        Trip.push_back(Trp(kx, ky - 6, ETAXY1 / dx_dy - 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys1
-                        Trip.push_back(Trp(kx, ky, -ETAXY2 / dx_dy + 2. / 3. * ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys2
-                        Trip.push_back(Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys3
-                        Trip.push_back(Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - 2. / 3. * ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys4
+                        Trip.push_back(Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys1
+                        Trip.push_back(Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys2
+                        Trip.push_back(Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys3
+                        Trip.push_back(Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys4
                         Trip.push_back(Trp(kx, kp, ptscale / dx)); //Pt1'
                         Trip.push_back(Trp(kx, kp + Ny1 * 6, -ptscale / dx)); //Pt2'
                         // Right part
@@ -1192,19 +1183,19 @@ int main() {
                         dRHOdx = (RHO(i, j) - RHO(i, j - 1)) / dx;
                         // Left part
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        Trip.push_back(Trp(ky, ky, -4. / 3. * (ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt)); //vys3
-                        Trip.push_back(Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2)); //vys1
-                        Trip.push_back(Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2)); //vys5
-                        Trip.push_back(Trp(ky, ky - 6, 4. / 3. * ETAYY1 / dy2)); //vys2
-                        Trip.push_back(Trp(ky, ky + 6, 4. / 3. * ETAYY2 / dy2)); //vys4
+                        Trip.push_back(Trp(ky, ky, - (ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt));	//vys3
+                        Trip.push_back(Trp(ky, ky  - Ny1 * 6, ETAXY1 / dx2)); //vys1
+                        Trip.push_back(Trp(ky, ky  + Ny1 * 6, ETAXY2 / dx2)); //vys5
+                        Trip.push_back(Trp(ky, ky  - 6, ETAYY1 / dy2)); //vys2
+                        Trip.push_back(Trp(ky, ky  + 6, ETAYY2 / dy2)); //vys4
                         double gy_dt_dRHOdx = gy * dt * dRHOdx / 4.;
                         double dx_dy = dx * dy;
-                        Trip.push_back(Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs1
-                        Trip.push_back(Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs2
-                        Trip.push_back(Trp(ky, kx, -ETAXY2 / dx_dy + 2. / 3. * ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs3
-                        Trip.push_back(Trp(ky, kx + 6, ETAXY2 / dx_dy - 2. / 3. * ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs4
+                        Trip.push_back(Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs1
+                        Trip.push_back(Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs2
+                        Trip.push_back(Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs3
+                        Trip.push_back(Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs4
                         Trip.push_back(Trp(ky, kp, ptscale / dy)); //Pt1'
-                        Trip.push_back(Trp(ky, kp + 6, -ptscale / dy)); //Pt2'
+                        Trip.push_back(Trp(ky, kp + 6, -ptscale / dy));	//Pt2'
                         // Right part
                         R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
@@ -1380,11 +1371,13 @@ int main() {
 
             SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
             L.setFromTriplets(Trip.begin(), Trip.end()); // Build Sparse Matrix
+            
             // 6) Solving matrix
             L.makeCompressed();
             solver.analyzePattern(L);
             solver.factorize(L); // Computationally most costly line in the code
             S = solver.solve(R);
+
             // 7) Reload solution
             // pfavr = 0;
             // pcount = 0;
@@ -1409,11 +1402,13 @@ int main() {
 
             Vmax = VSLIPB.maxCoeff();
             
+            /*
             if (dt > 1e4 && Vmax < 1e-7) {
                 avgpt = pt.sum() / (double)(pt.rows() * pt.cols()); //calculate average total pressure
                 diffpt = (PCONF + PTFDIFF) - avgpt;
                 pt += MatXd::Constant(Ny1, Nx1, diffpt);
             }
+            */
             
             // Velocity change
             DVX0 = vxs - VX0;
@@ -1528,7 +1523,8 @@ int main() {
             double dtslip = 1e30;
             if (timestep > tyield) {
                 for (int i = 0; i < Ny; i++) {
-                    if (y(i)  >= upper_block && y(i)  <= lower_block) {
+                    // if (y(i)  >= upper_block && y(i)  <= lower_block) {
+                    if (i == line_fault) {
                         for (int j = 0; j < Nx; j++) {
                             // reducing matrix calls
                             double arsf_temp = ARSF(i, j), brsf_temp = BRSF(i, j), lrsf_temp = LRSF(i, j), fric_temp = FRIC(i, j), eta0_temp = ETA0(i, j);
@@ -1625,7 +1621,7 @@ int main() {
                             // Compute visco - plastic viscosity
                             etapl = eta0_temp * syield / (eta0_temp * V + syield);
                             
-                            //LDZ: save syield
+                            // Save syield
                             SigmaY(i, j) = syield;
                             VSLIPB(i, j) = V;
                             SII_fault(i, j) = SIIB4;
@@ -1912,7 +1908,8 @@ int main() {
         spm.setZero();
 
         // Move markers by nodal velocity field
-        for (int m = 0; m < marknum; m++) {
+        for (int m = 0; m < 0; m++) {
+        // for (int m = 0; m < marknum; m++) {
             // Save marker position
             double xold = xm(m);
             double yold = ym(m);
@@ -1934,12 +1931,11 @@ int main() {
                 dxm = (xm(m) - xvx(j)) / dx;
                 dym = (ym(m) - yvx(i)) / dy;
                 // Weights
-                wtmij = (1 - dxm) * (1 - dym);
-                wtmi1j = (1 - dxm) * dym;
-                wtmij1 = dxm * (1 - dym);
-                wtmi1j1 = dxm * dym;
+                Matrix2d wtm;
+                wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
+                Matrix2d temp = vxs.block(i, j, 2, 2);
                 // Interpolation
-                vxm(rk) = vxs(i, j) * wtmij + vxs(i + 1, j) * wtmi1j + vxs(i, j + 1) * wtmij1 + vxs(i + 1, j + 1) * wtmi1j1;
+                vxm(rk) = temp(0, 0) * wtm(0, 0) + temp(1, 0) * wtm(1, 0) + temp(0, 1) * wtm(0, 1) + temp(1, 1) * wtm(1, 1);
                 
                 // vy - velocity interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1958,13 +1954,10 @@ int main() {
                 dxm = (xm(m) - xvy(j)) / dx;
                 dym = (ym(m) - yvy(i)) / dy;
                 // Weights
-                wtmij = (1 - dxm) * (1 - dym);
-                wtmi1j = (1 - dxm) * dym;
-                wtmij1 = dxm * (1 - dym);
-                wtmi1j1 = dxm * dym;
+                wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
+                temp = vys.block(i, j, 2, 2);
                 // Interpolation
-                vym(rk) = vys(i, j) * wtmij + vys(i + 1, j) * wtmi1j + vys(i, j + 1) * wtmij1 + vys(i + 1, j + 1) * wtmi1j1;
-                
+                vym(rk) = temp(0, 0) * wtm(0, 0) + temp(1, 0) * wtm(1, 0) + temp(0, 1) * wtm(0, 1) + temp(1, 1) * wtm(1, 1);
                 
                 // ESP = .5 *(dVy / dx - dVx / dy) interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1983,12 +1976,10 @@ int main() {
                 dxm = (xm(m) - x(j)) / dx;
                 dym = (ym(m) - y(i)) / dy;
                 // Weights
-                wtmij = (1 - dxm) * (1 - dym);
-                wtmi1j = (1 - dxm) * dym;
-                wtmij1 = dxm * (1 - dym);
-                wtmi1j1 = dxm * dym;
+                wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
+                temp = ESP.block(i, j, 2, 2);
                 // Interpolation ESP = .5 *(dVy / dx - dVx / dy) for the marker
-                spm(rk) = ESP(i, j) * wtmij + ESP(i + 1, j) * wtmi1j + ESP(i, j + 1) * wtmij1 + ESP(i + 1, j + 1) * wtmi1j1;
+                spm(rk) = temp(0, 0) * wtm(0, 0) + temp(1, 0) * wtm(1, 0) + temp(0, 1) * wtm(0, 1) + temp(1, 1) * wtm(1, 1);
                 
                 // Moving between A, B, C, D points
                 if (rk < 2) {
@@ -2104,6 +2095,11 @@ int main() {
                 out_fault.open("x_fault.txt");
                 out_fault << x << endl;
                 out_fault.close();
+
+                ofstream out_rsf;
+                out_rsf.open("rsf_fault.txt", ios_base::app | ios_base::out);
+                out_rsf << ARSF.row(line_fault) << "\n\n" << BRSF.row(line_fault) << "\n\n" << LRSF.row(line_fault) << endl;
+                out_rsf.close();
             }
             
             if (timesum_plus < timesum) {
@@ -2168,7 +2164,7 @@ int main() {
             }
         }
         
-        if (fix(timestep / savematstep) * savematstep == timestep) {
+        if (fix(timestep / savestep) * savestep == timestep) { // why not (timestep % savestep == 0) ???
             ofstream out_file;
             out_file.open("file.txt");
             out_file << timestep << endl;
