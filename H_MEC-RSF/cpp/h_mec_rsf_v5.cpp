@@ -746,6 +746,8 @@ int main() {
             dxm = (xm(m) - x(j)) / dx;
             dym = (ym(m) - y(i)) / dy;
             
+            // add description of data structure and changes to matlab version
+
             Matrix2d wtm;
             wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
 
@@ -2164,7 +2166,7 @@ int main() {
             }
         }
         
-        if (fix(timestep / savestep) * savestep == timestep) { // why not (timestep % savestep == 0) ???
+        if (timestep % savestep == 0) {
             ofstream out_file;
             out_file.open("file.txt");
             out_file << timestep << endl;
