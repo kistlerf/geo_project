@@ -628,8 +628,10 @@ int main() {
         ARSF = MatXd::Constant(Ny, Nx, arsfm(1)); // a - parameter of RSF
         BRSF = MatXd::Constant(Ny, Nx, brsfm(1)); // b - parameter of RSF
         LRSF = MatXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
-
-        for (auto i : {pt, vxs, vys, pf, vxD, vyD, RHO, ETA, ETA0, IETAPLB, SXY, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB}) {
+        
+        // set matrices to 0
+        for (auto i : {pt, vxs, vys, pf, vxD, vyD, RHO, ETA0, IETAPLB, SXY, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP,
+                       GGGB, PTF0, pt_ave, pf_ave, SXX, SXX0, SYY, SYY0, DILP, RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VSLIPB}) {
             i.setZero();
         }
         
@@ -642,7 +644,6 @@ int main() {
                     if (x(j) < TS_1) {
                         BRSF(i, j) = brsfm(0);
                         ARSF(i, j) = arsfm(0);
-                        LRSF(i, j) = lrsfm(0); // remove line
                     }
                     if (x(j) >= TS_1 && x(j) < TS_2) {
                         BRSF(i, j) = brsfm(0) - (brsfm(0) - brsfm(1)) * ((x(j) - TS_1) / (TS_2 - TS_1));
@@ -650,8 +651,6 @@ int main() {
                         LRSF(i, j) = lrsfm(0) - (lrsfm(0) - lrsfm(1)) * ((x(j) - TS_1) / (TS_2 - TS_1));
                     }
                     if (x(j) >= TS_2 && x(j) <= TS_3) {
-                        BRSF(i, j) = brsfm(1); // remove line
-                        ARSF(i, j) = arsfm(1); // remove line
                         LRSF(i, j) = lrsfm(1);
                     }
                     if (x(j) > TS_3 && x(j) <= TS_4) {
@@ -662,7 +661,6 @@ int main() {
                     if (x(j) > TS_4) {
                         BRSF(i, j) = brsfm(0);
                         ARSF(i, j) = arsfm(0);
-                        LRSF(i, j) = lrsfm(0); // remove line
                     }
                 }
             }
@@ -670,11 +668,7 @@ int main() {
         
         OM = OM0;
 
-        for (auto i : {ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, pt_ave, pf_ave, SXX, SXX0, SYY, SYY0, DILP,
-                       RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VSLIPB}) {
-            i.setZero();
-        }
-
+        // set vectors to 0
         for (auto i : {etam, etabm, porm, xm, ym, sxxm, syym, sxym, vx0m, vy0m, ptfm, amursfm}) {
             i.setZero();
         }
