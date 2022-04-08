@@ -408,9 +408,6 @@ VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timestep
 // ====================================================================================
 
 // hdf5 to store results
-
-const int RANK = 2;
-
 /*
 inputs:
     string filename
@@ -446,7 +443,7 @@ void add_matrix(const string &filename, const string &groupname, const MatXd& da
     H5File *file = new H5File(filename, H5F_ACC_RDWR);
     Group *group = new Group(file->openGroup(groupname));
 
-    DataSpace *dataspace = new DataSpace(RANK, dims);
+    DataSpace *dataspace = new DataSpace(2, dims);
     DataSet *dataset = new DataSet(file->createDataSet("/" + groupname + "/" + dataset_name, PredType::NATIVE_DOUBLE, *dataspace));
 
     double out[dims[0]][dims[1]];
@@ -476,7 +473,7 @@ void add_vector(const string &filename, const string &groupname, const VecXd& da
     H5File *file = new H5File(filename, H5F_ACC_RDWR);
     Group *group = new Group(file->openGroup(groupname));
 
-    DataSpace *dataspace = new DataSpace(RANK, dims);
+    DataSpace *dataspace = new DataSpace(1, dims);
     DataSet *dataset = new DataSet(file->createDataSet("/" + groupname + "/" + dataset_name, PredType::NATIVE_DOUBLE, *dataspace));
 
     double input[dims[0]];
@@ -826,13 +823,12 @@ int main() {
         FRITSUM.setZero();
         WTSUM.setZero();
 
-        OM0SUM.setZero();  // Old state parameter
-        OMSUM.setZero();   // State parameter
-        ARSFSUM.setZero(); // a - parameter of RSF
-        BRSFSUM.setZero(); // b - parameter of RSF
-        LRSFSUM.setZero(); // L - parameter of RSF
+        OM0SUM.setZero();
+        OMSUM.setZero();
+        ARSFSUM.setZero();
+        BRSFSUM.setZero();
+        LRSFSUM.setZero();
 
-        // Pressure nodes
         ETAPSUM.setZero();
         ETAP0SUM.setZero();
         ETAB0SUM.setZero();
@@ -1590,20 +1586,9 @@ int main() {
             
             // Plastic iterations
             // Compute strain rate, stress and stress change
-            ESP.setZero();
-            EXY.setZero();
-            SXY.setZero();
-            DSXY.setZero();
-            EXX.setZero();
-            SXX.setZero();
-            DSXX.setZero();
-            EYY.setZero();
-            SYY.setZero();
-            DSYY.setZero();
-            EII.setZero();
-            EIIVP.setZero();
-            SII.setZero();
-            DIS.setZero();
+            for (auto i : {ESP, EXY, SXY, DSXY, EXX, SXX, DSXX, EYY, SYY, DSYY, EII, EIIVP, SII, DSII, DIS}) {
+                i.setZero();
+            }
             
             EL_DECOM.setZero();   // Elastic (de)compaction
             VIS_COMP.setZero();   // Viscous compaction
@@ -1635,6 +1620,9 @@ int main() {
             }
             
             // External P - nodes: symmetry
+            for (auto i : {pt, pf, EXX, SXX, SXX0, EYY, SYY, SYY0, ETAP, ETAB, GGGP, GGGB}) {
+                copy_bounds(i);
+            }/*
             copy_bounds(pt);
             copy_bounds(pf);
             copy_bounds(EXX);
@@ -1646,7 +1634,7 @@ int main() {
             copy_bounds(ETAP);
             copy_bounds(ETAB);
             copy_bounds(GGGP);
-            copy_bounds(GGGB);
+            copy_bounds(GGGB);*/
 
             // Compute stress and strain rate invariants and dissipation
             // Process pressure cells
@@ -1990,21 +1978,9 @@ int main() {
         dt = min(min(dtx, dty), min(dt, dtlapusta));
         
         // Compute strain rate, stress and stress change
-        ESP.setZero();
-        EXY.setZero();
-        SXY.setZero();
-        DSXY.setZero();
-        EXX.setZero();
-        SXX.setZero();
-        DSXX.setZero();
-        EYY.setZero();
-        SYY.setZero();
-        DSYY.setZero();
-        EII.setZero();
-        EIIVP.setZero();
-        SII.setZero();
-        DSII.setZero();
-        DIS.setZero();
+        for (auto i : {ESP, EXY, SXY, DSXY, EXX, SXX, DSXX, EYY, SYY, DSYY, EII, EIIVP, SII, DSII, DIS}) {
+            i.setZero();
+        }
 
         // Process internal basic nodes
         for (int i = 0; i < Ny; i++) {
