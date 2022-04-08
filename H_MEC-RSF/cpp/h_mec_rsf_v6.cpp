@@ -628,34 +628,10 @@ int main() {
         ARSF = MatXd::Constant(Ny, Nx, arsfm(1)); // a - parameter of RSF
         BRSF = MatXd::Constant(Ny, Nx, brsfm(1)); // b - parameter of RSF
         LRSF = MatXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
-        
-        // Unknown parameters
-        pt.setZero();  // Total pressure
-        vxs.setZero(); // Solid vx - velocity
-        vys.setZero(); // Solid vy - velocity
-        pf.setZero();  // Fluid pressure
-        vxD.setZero(); // Darsi vx - velocity
-        vyD.setZero(); // Darsi vy - velocity
-        
-        // Nodal matrices
-        // Basic nodes
-        RHO.setZero();
-        ETA.setZero();
-        ETA0.setZero();
-        IETAPLB.setZero();
-        SXY.setZero();
-        SXY0.setZero();
-        YNY0.setZero();
-        KKK.setZero();
-        GGG.setZero();
-        COHC.setZero();
-        COHT.setZero();
-        FRIC.setZero();
-        FRIT.setZero();
-        DILC.setZero();
-        TTT.setZero();
-        EIIB.setZero();
-        STRPLB.setZero();
+
+        for (auto i : {pt, vxs, vys, pf, vxD, vyD, RHO, ETA, ETA0, IETAPLB, SXY, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB}) {
+            i.setZero();
+        }
         
         // Define Fault
         for (int i = 0; i < Ny; i++) {
@@ -693,69 +669,20 @@ int main() {
         }
         
         OM = OM0;
-        
-        // Pressure nodes
-        ETAB.setZero();
-        ETAB0.setZero();
-        ETAP.setZero();
-        ETAP0.setZero();
-        POR.setZero();
-        GGGP.setZero();
-        GGGB.setZero();
-        PTF0.setZero();
+
+        for (auto i : {ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, pt_ave, pf_ave, SXX, SXX0, SYY, SYY0, DILP,
+                       RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VSLIPB}) {
+            i.setZero();
+        }
+
+        for (auto i : {etam, etabm, porm, xm, ym, sxxm, syym, sxym, vx0m, vy0m, ptfm, amursfm}) {
+            i.setZero();
+        }
+
         PT0 = MatXd::Constant(Ny1, Nx1, PCONF + PTFDIFF);
         PF0 = MatXd::Constant(Ny1, Nx1, PCONF);
-        pt_ave.setZero();
-        pf_ave.setZero();
-        SXX.setZero();
-        SXX0.setZero();
-        SYY.setZero();
-        SYY0.setZero();
-        DILP.setZero();
-        // Vx nodes
-        RHOX.setZero();
-        RHOFX.setZero();
-        ETADX.setZero();
-        PORX.setZero();
-        VX0.setZero();
-        VXF0.setZero();
-        // Vy nodes
-        RHOY.setZero();
-        RHOFY.setZero();
-        ETADY.setZero();
-        PORY.setZero();
-        VY0.setZero();
-        VYF0.setZero();
         
-        VSLIPB.setZero();
-        
-        // Lagrangian solid markers
-        rhom.setZero();        // Density of solid
-        etasm.setZero();       // Standard shear viscosity of bulk
-        etam.setZero();        // Shear viscosity of bulk
-        etabm.setZero();       // Bulk viscosity of bulk
-        cohescm.setZero();     // Cohesion for confined fracture of solid
-        frictcm.setZero();     // friction for confined fracture of solid
-        dilatcm.setZero();     // dilatation for confined fracture of solid
-        cohestm.setZero();     // Cohesion for tensile fracture of solid
-        fricttm.setZero();     // friction for tensile fracture of solid
-        porm.setZero();        // Porosity of solid
-        kkkm.setZero();        // Standard permeability of solid
-        rhofm.setZero();       // Density of fluid
-        etafm.setZero();       // Viscosity of fluid
-        t_marker.setZero();    // Marker rock type
-        xm.setZero();          // Horizontal coordinates of solid markers
-        ym.setZero();          // Vertical coordinates of solid markers
-        sxxm.setZero();        // Marker SIGMAxx', Pa
-        syym.setZero();        // Marker SIGMAyy', Pa
-        sxym.setZero();        // Marker SIGMAxy', Pa
-        gsm.setZero();         // Standard shear modulus of bulk, Pa
-        gm.setZero();          // Shear modulus of bulk, Pa
-        vx0m.setZero();        // Marker horizontal velocity
-        vy0m.setZero();        // Marker vertical velocity
-        ptfm.setZero();        // Pt - Pf, Pa
-        amursfm.setZero();     // RSF a / mu parameter
-
+        // Pressure nodes
         t_marker = VecXd::Constant(marknum, 1);
         rhom = VecXd::Constant(marknum, 2800);
         etasm = VecXd::Constant(marknum, 1e21);
@@ -805,53 +732,12 @@ int main() {
     // /////////////////////////////////////////////////////////////////////////////////////// 
 
     for (; timestep <= num_timesteps; timestep++) {
-
-        // Interpolate ETA, RHO to nodal points
-        // Basic nodes
-        RHOSUM.setZero();
-        ETASUM.setZero();
-        KKKSUM.setZero();
-        TTTSUM.setZero();
-        SXYSUM.setZero();
-        GGGSUM.setZero();
-        ETA.setZero();
-        ETA0SUM.setZero();
-        COHCSUM.setZero();
-        FRICSUM.setZero();
-        DILCSUM.setZero();
-        COHTSUM.setZero();
-        FRITSUM.setZero();
-        WTSUM.setZero();
-
-        OM0SUM.setZero();
-        OMSUM.setZero();
-        ARSFSUM.setZero();
-        BRSFSUM.setZero();
-        LRSFSUM.setZero();
-
-        ETAPSUM.setZero();
-        ETAP0SUM.setZero();
-        ETAB0SUM.setZero();
-        PORSUM.setZero();
-        SXXSUM.setZero();
-        SYYSUM.setZero();
-        GGGPSUM.setZero();
-        WTPSUM.setZero();
-        // Vx nodes
-        RHOXSUM.setZero();
-        RHOFXSUM.setZero();
-        ETADXSUM.setZero();
-        PORXSUM.setZero();
-        VX0SUM.setZero();
-        WTXSUM.setZero();
-        // Vy nodes
-        RHOYSUM.setZero();
-        RHOFYSUM.setZero();
-        ETADYSUM.setZero();
-        PORYSUM.setZero();
-        VY0SUM.setZero();
-        WTYSUM.setZero();
-
+        for (auto i : {RHOSUM, ETASUM, KKKSUM, TTTSUM, SXYSUM, GGGSUM, ETA, ETA0SUM, COHCSUM, FRICSUM, DILCSUM, COHTSUM, FRITSUM, WTSUM, 
+                       OM0SUM, OMSUM, ARSFSUM, BRSFSUM, LRSFSUM, ETAPSUM, ETAP0SUM, ETAB0SUM, PORSUM, SXXSUM, SYYSUM, GGGPSUM, WTPSUM,
+                       RHOXSUM, RHOFXSUM, ETADXSUM, PORXSUM, VX0SUM, WTXSUM, RHOYSUM, RHOFYSUM, ETADYSUM, PORYSUM, VY0SUM, WTYSUM}) {
+            i.setZero();
+        }
+        
         // Cycle on markers
         for (int m = 0; m < marknum; m++) {
             
@@ -1622,19 +1508,7 @@ int main() {
             // External P - nodes: symmetry
             for (auto i : {pt, pf, EXX, SXX, SXX0, EYY, SYY, SYY0, ETAP, ETAB, GGGP, GGGB}) {
                 copy_bounds(i);
-            }/*
-            copy_bounds(pt);
-            copy_bounds(pf);
-            copy_bounds(EXX);
-            copy_bounds(SXX);
-            copy_bounds(SXX0);
-            copy_bounds(EYY);
-            copy_bounds(SYY);
-            copy_bounds(SYY0);
-            copy_bounds(ETAP);
-            copy_bounds(ETAB);
-            copy_bounds(GGGP);
-            copy_bounds(GGGB);*/
+            }
 
             // Compute stress and strain rate invariants and dissipation
             // Process pressure cells
