@@ -349,11 +349,8 @@ MatXd WTYSUM(Ny1, Nx1);
 
 MatXd ESP(Ny, Nx);
 MatXd EXY(Ny, Nx);
-MatXd DSXY(Ny, Nx);
 MatXd EXX(Ny1, Nx1);
-MatXd DSXX(Ny1, Nx1);
 MatXd EYY(Ny1, Nx1);
-MatXd DSYY(Ny1, Nx1);
 MatXd EII(Ny1, Nx1);
 MatXd EIIVP(Ny1, Nx1);
 MatXd SII(Ny1, Nx1);
@@ -739,8 +736,6 @@ int main() {
             double kkkmm = kkkm(m) * pow(porm(m) / POR0, 3);
             // Checking permeability limits
             kkkmm = enforce_bounds(kkkmm, kkkmin, kkkmax);
-
-            // Cohesion, friction of porous matrix
             
             // Viscosity of porous matrix
             if (t_marker(m) != 0) {
@@ -790,7 +785,10 @@ int main() {
             dxm = (xm(m) - x(j)) / dx;
             dym = (ym(m) - y(i)) / dy;
             
-            // add description of data structure and changes to matlab version
+            // merged similar computations of matlab version
+            // The computations on the 4 elements are now done on a 2x2-sub-block of the matrix
+            // Similarly wtm is a 2x2 matrix that stores the corresponding value
+            // Sub-block += variable * wtm
 
             Matrix2d wtm;
             wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
@@ -1466,7 +1464,7 @@ int main() {
             
             // Plastic iterations
             // Compute strain rate, stress and stress change
-            for (auto i : {ESP, EXY, SXY, DSXY, EXX, SXX, DSXX, EYY, SYY, DSYY, EII, EIIVP, SII, DSII, DIS}) {
+            for (auto i : {EXY, SXY, EXX, SXX, EYY, SYY}) {
                 i.setZero();
             }
             
@@ -1476,58 +1474,27 @@ int main() {
             // Process internal basic nodes
             for (int i = 0; i < Ny; i++) {
                 for (int j = 0; j < Nx; j++) {
-                    // ESP = .5 *(dVy / dx - dVx / dy), EXY, SXY, DSXY
-                    ESP(i, j) = .5 * ((vys(i, j + 1) - vys(i, j)) / dx - (vxs(i + 1, j) - vxs(i, j)) / dy);
                     EXY(i, j) = .5 * ((vxs(i + 1, j) - vxs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dx);
                     KXY = dt * GGG(i, j) / (dt * GGG(i, j) + ETA(i, j));
                     SXY(i, j) = 2 * ETA(i, j) * EXY(i, j) * KXY + SXY0(i, j) * (1 - KXY);
-                    DSXY(i, j) = SXY(i, j) - SXY0(i, j);
                 }
             }
 
             // Process pressure cells
             for (int i = 1; i < Ny; i++) {
                 for (int j = 1; j < Nx; j++) {
-                    // EXX, SXX, DSXX
+                    // EXX, SXX
                     EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
                     EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
                     KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
                     SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
                     SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
-                    DSXX(i, j) = SXX(i, j) - SXX0(i, j);
-                    DSYY(i, j) = SYY(i, j) - SYY0(i, j);
                 }
             }
             
             // External P - nodes: symmetry
             for (auto i : {pt, pf, EXX, SXX, SXX0, EYY, SYY, SYY0, ETAP, ETAB, GGGP, GGGB}) {
                 copy_bounds(i);
-            }
-
-            // Compute stress and strain rate invariants and dissipation
-            // Process pressure cells
-            for (int i = 1; i < Ny; i++) {
-                for (int j = 1; j < Nx; j++) {
-                    // reducing matrix calls
-                    double sky_ij = SXY(i, j), sky_i1j = SXY(i - 1, j), sky_ij1 = SXY(i, j - 1), sky_i1j1 = SXY(i - 1, j - 1);
-                    double eta_ij_2 = 2 * ETA(i, j), eta_i1j_2 = 2 * ETA(i - 1, j), eta_ij1_2 = 2 * ETA(i, j - 1), eta_i1j1_2 = 2 * ETA(i - 1, j - 1);
-                    double sxx_ij = SXX(i, j), syy_ij = SYY(i, j);
-                    double etap_2 = ETAP(i, j);
-
-                    // EXY term is averaged from four surrounding basic nodes
-                    EXY2 = (pow(EXY(i, j), 2) + pow(EXY(i - 1, j), 2) + pow(EXY(i, j - 1), 2) + pow(EXY(i - 1, j - 1), 2)) / 4.;
-                    EII(i, j) = sqrt(0.5 * (pow(EXX(i, j), 2) + pow(EYY(i, j), 2)) + EXY2);
-                    EXYVP2 = (pow(sky_ij / eta_ij_2, 2) + pow(sky_i1j / eta_i1j_2, 2) + pow(sky_ij1 / eta_ij1_2, 2) + pow(sky_i1j1 / eta_i1j1_2, 2)) / 4.;
-                    EIIVP(i, j) = sqrt(0.5 * (pow(sxx_ij / etap_2, 2) + pow(syy_ij / etap_2, 2)) + EXYVP2);
-                    // Second strain rate invariant SII
-                    // SXY term is averaged from four surrounding basic nodes
-                    SXY2 = (pow(sky_ij, 2) + pow(sky_i1j, 2) + pow(sky_ij1, 2) + pow(sky_i1j1, 2)) / 4.;
-                    SII(i, j) = sqrt(0.5 * (pow(sxx_ij, 2) + pow(syy_ij, 2)) + SXY2);
-                    
-                    // Dissipation
-                    DISXY = (pow(sky_ij, 2) / eta_ij_2 + pow(sky_i1j, 2) / eta_i1j_2 + pow(sky_ij1, 2) / eta_ij1_2 + pow(sky_i1j1, 2) / eta_i1j1_2) / 4.;
-                    DIS(i, j) = pow(sxx_ij, 2) / etap_2 + pow(syy_ij, 2) / etap_2 + 2 * DISXY;
-                }
             }
 
             // Update viscosity for yielding
@@ -1846,51 +1813,47 @@ int main() {
         dt = min(min(dtx, dty), min(dt, dtlapusta));
         
         // Compute strain rate, stress and stress change
-        for (auto i : {ESP, EXY, SXY, DSXY, EXX, SXX, DSXX, EYY, SYY, DSYY, EII, EIIVP, SII, DSII, DIS}) {
+        for (auto i : {ESP, EXY, SXY, EXX, SXX, EYY, SYY, EII, EIIVP, SII, DSII, DIS}) {
             i.setZero();
         }
 
         // Process internal basic nodes
         for (int i = 0; i < Ny; i++) {
             for (int j = 0; j < Nx; j++) {
-                // ESP = .5 *(dVy / dx - dVx / dy), EXY, SXY, DSXY
+                // ESP = .5 *(dVy / dx - dVx / dy), EXY, SXY
                 ESP(i, j) = .5 * ((vys(i, j + 1) - vys(i, j)) / dx - (vxs(i + 1, j) - vxs(i, j)) / dy);
                 EXY(i, j) = .5 * ((vxs(i + 1, j) - vxs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dx);
                 KXY = dt * GGG(i, j) / (dt * GGG(i, j) + ETA(i, j));
                 SXY(i, j) = 2 * ETA(i, j) * EXY(i, j) * KXY + SXY0(i, j) * (1 - KXY);
-                DSXY(i, j) = SXY(i, j) - SXY0(i, j);
             }
         }
 
         // Process pressure cells
         for (int i = 1; i < Ny; i++) {
             for (int j = 1; j < Nx; j++) {
-                // EXX, SXX, DSXX
+                // EXX, SXX
                 EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
                 EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
                 KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
                 SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
                 SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
-                DSXX(i, j) = SXX(i, j) - SXX0(i, j);
-                DSYY(i, j) = SYY(i, j) - SYY0(i, j);
         
                 // Compute stress and strain rate invariants and dissipation
+                Matrix2d SXY_temp = SXY.block(i - 1, j - 1, 2, 2);
+                Matrix2d ETA_temp = 2 * SXY.block(i - 1, j - 1, 2, 2);
 
-                double sky_ij = SXY(i, j), sky_i1j = SXY(i - 1, j), sky_ij1 = SXY(i, j - 1), sky_i1j1 = SXY(i - 1, j - 1);
-                double eta_ij_2 = 2 * ETA(i, j), eta_i1j_2 = 2 * ETA(i - 1, j), eta_ij1_2 = 2 * ETA(i, j - 1), eta_i1j1_2 = 2 * ETA(i - 1, j - 1);
-            
                 // EXY term is averaged from four surrounding basic nodes
                 EXY2 = (pow(EXY(i, j), 2) + pow(EXY(i - 1, j), 2) + pow(EXY(i, j - 1), 2) + pow(EXY(i - 1, j - 1), 2)) / 4.;
                 EII(i, j) = sqrt(pow(EXX(i, j), 2) + EXY2);
-                EXYVP2 = (pow(sky_ij / eta_ij_2, 2) + pow(sky_i1j / eta_i1j_2, 2) + pow(sky_ij1 / eta_ij1_2, 2) + pow(sky_i1j1 / eta_i1j1_2, 2)) / 4.;
+                EXYVP2 = (pow(SXY_temp(1, 1) / ETA_temp(1, 1), 2) + pow(SXY_temp(0, 1) / ETA_temp(0, 1), 2) + pow(SXY_temp(1, 0) / ETA_temp(1, 0), 2) + pow(SXY_temp(0, 0) / ETA_temp(0, 0), 2)) / 4.;
                 EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + EXYVP2);
                 // Second strain rate invariant SII
                 // SXY term is averaged from four surrounding basic nodes
-                SXY2 = (pow(sky_ij, 2) + pow(sky_i1j, 2) + pow(sky_ij1, 2) + pow(sky_i1j1, 2)) / 4.;
+                SXY2 = (pow(SXY_temp(1, 1), 2) + pow(SXY_temp(0, 1), 2) + pow(SXY_temp(1, 0), 2) + pow(SXY_temp(0, 0), 2)) / 4.;
                 SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + SXY2);
                 
                 // Dissipation
-                DISXY = (pow(sky_ij, 2) / eta_ij_2 + pow(sky_i1j, 2) /  eta_i1j_2 + pow(sky_ij1, 2) / eta_ij1_2 + pow(sky_i1j1, 2) / eta_i1j1_2) / 4.;
+                DISXY = (pow(SXY_temp(1, 1), 2) / ETA_temp(1, 1) + pow(SXY_temp(0, 1), 2) /  ETA_temp(0, 1) + pow(SXY_temp(1, 0), 2) / ETA_temp(1, 0) + pow(SXY_temp(0, 0), 2) / ETA_temp(0, 0)) / 4.;
                 DIS(i, j) = pow(SXX(i, j), 2) / (2 * ETAP(i, j)) + pow(SYY(i, j), 2) / (2 * ETAP(i, j)) + 2 * DISXY;
                 
                 
@@ -1945,11 +1908,9 @@ int main() {
                 dxm = (xm(m) - xvx(j)) / dx;
                 dym = (ym(m) - yvx(i)) / dy;
                 // Weights
-                Matrix2d wtm;
-                wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
                 Matrix2d temp = vxs.block(i, j, 2, 2);
                 // Interpolation
-                vxm(rk) = temp(0, 0) * wtm(0, 0) + temp(1, 0) * wtm(1, 0) + temp(0, 1) * wtm(0, 1) + temp(1, 1) * wtm(1, 1);
+                vxm(rk) = temp(0, 0) * (1 - dxm) * (1 - dym) + temp(1, 0) * (1 - dxm) * dym + temp(0, 1) * dxm * (1 - dym) + temp(1, 1) * dxm * dym;
                 
                 // vy - velocity interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1968,10 +1929,9 @@ int main() {
                 dxm = (xm(m) - xvy(j)) / dx;
                 dym = (ym(m) - yvy(i)) / dy;
                 // Weights
-                wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
                 temp = vys.block(i, j, 2, 2);
                 // Interpolation
-                vym(rk) = temp(0, 0) * wtm(0, 0) + temp(1, 0) * wtm(1, 0) + temp(0, 1) * wtm(0, 1) + temp(1, 1) * wtm(1, 1);
+                vym(rk) = temp(0, 0) * (1 - dxm) * (1 - dym) + temp(1, 0) * (1 - dxm) * dym + temp(0, 1) * dxm * (1 - dym) + temp(1, 1) * dxm * dym;
                 
                 // ESP = .5 *(dVy / dx - dVx / dy) interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1990,10 +1950,9 @@ int main() {
                 dxm = (xm(m) - x(j)) / dx;
                 dym = (ym(m) - y(i)) / dy;
                 // Weights
-                wtm << (1 - dxm) * (1 - dym), dxm * (1 - dym), (1 - dxm) * dym, dxm * dym;
                 temp = ESP.block(i, j, 2, 2);
                 // Interpolation ESP = .5 *(dVy / dx - dVx / dy) for the marker
-                spm(rk) = temp(0, 0) * wtm(0, 0) + temp(1, 0) * wtm(1, 0) + temp(0, 1) * wtm(0, 1) + temp(1, 1) * wtm(1, 1);
+                spm(rk) = temp(0, 0) * (1 - dxm) * (1 - dym) + temp(1, 0) * (1 - dxm) * dym + temp(0, 1) * dxm * (1 - dym) + temp(1, 1) * dxm * dym;
                 
                 // Moving between A, B, C, D points
                 if (rk < 2) {
