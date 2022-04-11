@@ -58,10 +58,10 @@ const int num_timesteps = 12; // very small number for testing
 // Define Numerical model
 // Eulerian basic grid
 
-const double xsize = 40000.;      // size in horizontal direction, m
-const double ysize = 10000.;      // size in vertical direction, m
-const int Nx = 401;               // number of grid steps in horizontal directions
-const int Ny = 51;                // number of grid steps in vertical direction
+const double xsize = 40000.; // size in horizontal direction, m
+const double ysize = 10000.; // size in vertical direction, m
+const int Nx = 401;          // number of grid steps in horizontal directions
+const int Ny = 51;           // number of grid steps in vertical direction
 
 // Where to apply the transition on the left(1) and right(2)
 const double TS_1 = 2e3;
@@ -71,10 +71,10 @@ const double TS_3 = 34e3;
 const double TS_4 = 38e3;
 
 // Eulerian Staggered Grid
-const int Nx1 = Nx + 1;           // Number of horizontal lines for staggered grid
-const int Ny1 = Ny + 1;           // Number of vertical lines for staggered grid
+const int Nx1 = Nx + 1;      // Number of horizontal lines for staggered grid
+const int Ny1 = Ny + 1;      // Number of vertical lines for staggered grid
 
-const int N = Nx1 * Ny1 * 6;      // Global number of unknowns
+const int N = Nx1 * Ny1 * 6; // Global number of unknowns
 
 // ========================================
 // Output files
@@ -102,47 +102,47 @@ VecXd xp = VecXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal 
 VecXd yp = VecXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
 
 //               Block  Fault
-Vector2d arsfm = {.025, .006  };   // a - parameter of RSF
-Vector2d brsfm = {.001, .015  };   // b - parameter of RSF
-Vector2d lrsfm = {.020, .0085 };   // L - parameter of RSF (characteristic slip distance)
-Vector2d omm   = {10,   -10   };   // State
-double V0 = 1.e-9;                 // Reference slip velocity of RSF, m / s
-int alpha = 29;                    // Scaling factor for shear viscosity of porous matrix
+Vector2d arsfm = {.025, .006  }; // a - parameter of RSF
+Vector2d brsfm = {.001, .015  }; // b - parameter of RSF
+Vector2d lrsfm = {.020, .0085 }; // L - parameter of RSF (characteristic slip distance)
+Vector2d omm   = {10,   -10   }; // State
+double V0 = 1.e-9;               // Reference slip velocity of RSF, m / s
+int alpha = 29;                  // Scaling factor for shear viscosity of porous matrix
 
 // ========================================
 const double POR0 = .01; // Standard porosity
 
 // ========================================
 // Brittle / plastic rheology
-const double cohes = 0.;     // Cohesion, Pa
-const double friction = .6;     // unused variable ???
-const double dilatation = 0.;  // Dilatation coefficient confined
-const double tensile = 1.;      // Internal friction coefficient tensile
-const double shearmod = 3.e10; // Shear modulus
+const double cohes = 0.;         // Cohesion, Pa
+const double friction = .6;      // unused variable ???
+const double dilatation = 0.;    // Dilatation coefficient confined
+const double tensile = 1.;       // Internal friction coefficient tensile
+const double shearmod = 3.e10;   // Shear modulus
 const double BETAFLUID = 1.e-8;  // 4.0e-10; // Compressibility of fluid, 1 / Pa
 const double BETASOLID = 2.e-11; // 2.5e-11; // Compressibility of solid, 1 / Pa
 const double faultwidth = dx;    // Characteristic fault width, m
 
 // ========================================
 // Constants
-const double gx = 0.;             // Horizontal gravity, m / s^2
-const double gy = 0.;             // Vertical gravity, m / s^2
-const double PCONF = 1.e7;     // Confining pressure
-const double PTFDIFF = 3.e7;    // Total - Fluid Pressure difference in the top row, Pa
+const double gx = 0.;        // Horizontal gravity, m / s^2
+const double gy = 0.;        // Vertical gravity, m / s^2
+const double PCONF = 1.e7;   // Confining pressure
+const double PTFDIFF = 3.e7; // Total - Fluid Pressure difference in the top row, Pa
 
 // ========================================
 // Limits
-const double etamin = 1e-3; // Lower shear viscosity cutoff
-const double etamax = 1e50; // Upper shear viscosity cutoff
+const double etamin = 1e-3;  // Lower shear viscosity cutoff
+const double etamax = 1e50;  // Upper shear viscosity cutoff
 const double kkkmin = 1e-22; // Lower Darsi viscosity cutoff
 const double kkkmax = 1e-12; // Upper Darsi viscosity cutoff
-const double stpmax = 2e-4; // / dy * faultwidth; // Max gridstep fraction for marker displacement in the channel
+const double stpmax = 2e-4;  // / dy * faultwidth; // Max gridstep fraction for marker displacement in the channel
 const double stpmax1 = 6e-5; // / dy * faultwidth; // Max gridstep fraction for marker displacement
 
 //Boundary conditions
 const double bcupper = -1e-9;
 const double bclower = 1e-9;
-const double bcvyflower = 0;// - 1e-12;
+const double bcvyflower = 0; // -1e-12;
 // bcvxfleft = bcvyflower * xsize / ysize;
 
 // Entering time cycle
@@ -196,8 +196,8 @@ double dilij;
 const double pi = M_PI;
 
 // Basic nodes
-MatXd OM0(Ny, Nx);    // Old state parameter
-MatXd OM(Ny, Nx);     // State parameter
+MatXd OM0(Ny, Nx);  // Old state parameter
+MatXd OM(Ny, Nx);   // State parameter
 MatXd OM5(Ny, Nx);
 MatXd ARSF(Ny, Nx); // a - parameter of RSF
 MatXd BRSF(Ny, Nx); // b - parameter of RSF
@@ -373,13 +373,11 @@ int ynlast;
 
 double cohescmm, cohestmm, frictcmm, dilatcmm, fricttmm, etasmm0, etamm0, etamm, rhomm, etadm, dxm, dym, wtmij, wtmi1j, wtmij1, wtmi1j1;
 double dt0, dt00, dtx, dty, dtlapusta;
-double etamincur, dTETAmax, etapl, IETAPL, ETAPL, ETAVP;
 double KXX, KXY, KBW, KSK, BETADRAINED;
 double pfscale, ptscale, avgpt, diffpt, PT0_ave, PF0_ave, ptB, pfB, prB;
 double ETAXY1, ETAXY2, ETAXX1, ETAXX2, ETAYY1, ETAYY2, GXY1, GXY2, GXX1, GXX2, GYY1, GYY2, KXY1, KXY2, KXX1, KXX2, KYY1, KYY2, SXY1, SXY2, SXX1, SXX2, SYY1, SYY2, EXY2, EXYVP2, DISXY, EXY1;
 double dRHOdx, dRHOdy;
-double V, Vmax, maxvxy;
-double SIIB0, SIIB1, SIIB2, SIIB3, SIIB4, SIIB5, DSIIB1, DSIIB2, EIISLIP;
+double Vmax, maxvxy;
 double kfxy, kfxy1, kfxy0;
 double syield, siiel, SIGMA2;
 
@@ -971,7 +969,7 @@ int main() {
         
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
             // Limiting viscosity
-            etamincur = shearmod * dt * 1e-4;
+            double etamincur = shearmod * dt * 1e-4;
             
             // External P - nodes: symmetry
             copy_bounds(pt);
@@ -1001,7 +999,7 @@ int main() {
             for (int i = 1; i < Ny; i++) {
                 for (int j = 1; j < Nx; j++) {
                     // Compute viscoplastic viscosity
-                    IETAPL = (IETAPLB(i - 1, j - 1) + IETAPLB(i, j - 1) + IETAPLB(i - 1, j) + IETAPLB(i, j)) / 4.;
+                    double IETAPL = (IETAPLB(i - 1, j - 1) + IETAPLB(i, j - 1) + IETAPLB(i - 1, j) + IETAPLB(i, j)) / 4.;
                     if (YNY0(i - 1, j - 1) > 0 || YNY0(i, j - 1) > 0 || YNY0(i - 1, j) > 0 || YNY0(i, j) > 0) {
                         ETAP(i, j) = 1. / (1. / ETAP0(i, j) + IETAPL);
                         ETAB(i, j) = 1. / (1. / ETAB0(i, j) + dy / faultwidth * IETAPL * POR(i, j));
@@ -1243,7 +1241,7 @@ int main() {
                         // Right part
                         R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
-                    
+
                     // 5c) Composing equation for Pt
                     if (i == 0 || j == 0 || i == Ny || j == Nx) { // || (i == 2 && j == 2))
                         // BC equation: 1 * Pt = 0
@@ -1534,7 +1532,6 @@ int main() {
                             siiel = SIIB(i, j) / kfxy;
                             // Compute maximal stress invariant with viscous viscosity
                             kfxy0 = eta0_temp / (GGG(i, j) * dt + eta0_temp);
-                            SIIB0 = siiel * kfxy0;
                             
                             // Compute old viscoplastic slip rate
                             // Compute PEFF
@@ -1544,20 +1541,20 @@ int main() {
                                 prB = 1e3;
                             }
                             // Compute old power law strain rate
-                            SIIB1 = SIIB(i, j);
+                            double SIIB1 = SIIB(i, j);
                             
                             //Compute slip velocity for current stress invariant and state
-                            V = 2 * V0 * sinh(max(SIIB1, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
+                            double V = 2 * V0 * sinh(max(SIIB1, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
                             
-                            EIISLIP = V / dx / 2.;
+                            double EIISLIP = V / dx / 2.;
                             
                             // Compute new ETAVP
-                            ETAPL = SIIB1 / 2. / EIISLIP;
-                            ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
+                            double ETAPL = SIIB1 / 2. / EIISLIP;
+                            double ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
                             kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                            SIIB2 = siiel * kfxy1;
-                            DSIIB1 = SIIB2 - SIIB1;
+                            double SIIB2 = siiel * kfxy1;
+                            double DSIIB1 = SIIB2 - SIIB1;
                             
                             //Compute slip velocity for current stress invariant and state
                             V = 2 * V0 * sinh(max(SIIB2, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
@@ -1569,8 +1566,8 @@ int main() {
                             ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
                             kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                            SIIB3 = siiel * kfxy1;
-                            DSIIB2 = SIIB3 - SIIB2;
+                            double DSIIB2 = siiel * kfxy1 - SIIB2;
+                            double SIIB4 = 0.;
                             
                             if ((DSIIB1 >= 0 && DSIIB2 <= 0) || (DSIIB1 <= 0 && DSIIB2 >= 0)) {
                                 double DSIIB = 1e9;
@@ -1588,8 +1585,7 @@ int main() {
                                     ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                                     // Compute new stress invariant
                                     kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                                    SIIB5 = siiel * kfxy1;
-                                    DSIIB = SIIB5 - SIIB4;
+                                    DSIIB = siiel * kfxy1 - SIIB4;
                                     if ((DSIIB >= 0 && DSIIB1 >= 0) || (DSIIB <= 0 && DSIIB1 <= 0)) {
                                         SIIB1 = SIIB4;
                                     } else {
@@ -1612,7 +1608,7 @@ int main() {
                             syield = max(syieldmin, (ptB - pfB) * arsf_temp * asinh(V / 2. / V0 * exp((brsf_temp * OM5(i, j) + fric_temp) / arsf_temp)));
                             
                             // Compute visco - plastic viscosity
-                            etapl = eta0_temp * syield / (eta0_temp * V + syield);
+                            double etapl = eta0_temp * syield / (eta0_temp * V + syield);
                             
                             // Save syield
                             SigmaY(i, j) = syield;
@@ -1626,6 +1622,7 @@ int main() {
                             double vi = (3. / BETASOLID - g_temp) / (6. / BETASOLID + g_temp);
                             double k = g_temp / (pi * (1 - vi) * dx);
                             double xi = .25 * pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) - k * lrsf_temp / arsf_temp / prB;
+                            double dTETAmax;
                             if (xi < 0) {
                                 dTETAmax = min(1. - (brsf_temp - arsf_temp) * prB / (k * lrsf_temp), .2);
                             } else {
