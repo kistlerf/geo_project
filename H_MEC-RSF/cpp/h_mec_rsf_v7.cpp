@@ -38,6 +38,7 @@ Fluid Continuity: dVxD / dx + dVyD / dy - (Pt - Pf) / ETAbulk = 0
 #include <H5Cpp.h>
 
 #include "hdf5.hpp"
+#include "constants.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -52,145 +53,6 @@ typedef MatrixXd MatXd;
 // ====================================================================================
 // global variable declarations
 // ====================================================================================
-
-// set timestep limit
-const int num_timesteps = 100; // very small number for testing
-
-// ========================================
-// Define Numerical model
-// Eulerian basic grid
-const double xsize = 40000.; // size in horizontal direction, m
-const double ysize = 10000.; // size in vertical direction, m
-const int Nx = 401;          // number of grid steps in horizontal directions
-const int Ny = 51;           // number of grid steps in vertical direction
-
-// Where to apply the transition on the left(1) and right(2)
-const double TS_1 = 2e3;
-const double TS_2 = 4e3;
-
-const double TS_3 = 34e3;
-const double TS_4 = 38e3;
-
-// Eulerian Staggered Grid
-const int Nx1 = Nx + 1;      // Number of horizontal lines for staggered grid
-const int Ny1 = Ny + 1;      // Number of vertical lines for staggered grid
-
-const int N = Nx1 * Ny1 * 6; // Global number of unknowns
-
-// ========================================
-// Output files
-int timesum_plus = 0;
-const int line_fault = (Ny - 1) / 2.; 
-
-// ========================================
-// Coordinates
-const double dx = xsize / (Nx - 1); // grid step in horizontal direction, m
-const double dy = ysize / (Ny - 1); // grid step in vertical direction, m
-const double xbeg = 0;
-const double xend = xsize;
-const double ybeg = 0;
-const double yend = ysize;
-
-// define type and replace : operator
-VecXd x = VecXd::LinSpaced(Nx, xbeg, xend); // horizontal coordinates of basic grid points
-VecXd y = VecXd::LinSpaced(Ny, ybeg, yend); // vertical coordinates of basic grid points
-VecXd xvx = VecXd::LinSpaced(Nx1, xbeg, xend + dx); // Horizontal coordinates of Vx - nodes
-VecXd yvx = VecXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
-VecXd xvy = VecXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal coordinates of Vy - nodes
-VecXd yvy = VecXd::LinSpaced(Ny1, ybeg, yend + dy); // Vertical coordinates of Vy - nodes
-VecXd xp = VecXd::LinSpaced(Nx1, xbeg - dx / 2., xend + dx / 2.); // Horizontal coordinates of P - nodes
-VecXd yp = VecXd::LinSpaced(Ny1, ybeg - dy / 2., yend + dy / 2.); // Vertical coordinates of Vx - nodes
-
-//               Block  Fault
-Vector2d arsfm = {.025, .006  }; // a - parameter of RSF
-Vector2d brsfm = {.001, .015  }; // b - parameter of RSF
-Vector2d lrsfm = {.020, .0085 }; // L - parameter of RSF (characteristic slip distance)
-Vector2d omm   = {10,   -10   }; // State
-double V0 = 1.e-9;               // Reference slip velocity of RSF, m / s
-int alpha = 29;                  // Scaling factor for shear viscosity of porous matrix
-
-// ========================================
-const double POR0 = .01; // Standard porosity
-
-// ========================================
-// Brittle / plastic rheology
-const double cohes = 0.;         // Cohesion, Pa
-const double friction = .6;      // unused variable ???
-const double dilatation = 0.;    // Dilatation coefficient confined
-const double tensile = 1.;       // Internal friction coefficient tensile
-const double shearmod = 3.e10;   // Shear modulus
-const double BETAFLUID = 1.e-8;  // 4.0e-10; // Compressibility of fluid, 1 / Pa
-const double BETASOLID = 2.e-11; // 2.5e-11; // Compressibility of solid, 1 / Pa
-const double faultwidth = dx;    // Characteristic fault width, m
-
-// ========================================
-// Constants
-const double gx = 0.;        // Horizontal gravity, m / s^2
-const double gy = 0.;        // Vertical gravity, m / s^2
-const double PCONF = 1.e7;   // Confining pressure
-const double PTFDIFF = 3.e7; // Total - Fluid Pressure difference in the top row, Pa
-
-// ========================================
-// Limits
-const double etamin = 1e-3;  // Lower shear viscosity cutoff
-const double etamax = 1e50;  // Upper shear viscosity cutoff
-const double kkkmin = 1e-22; // Lower Darsi viscosity cutoff
-const double kkkmax = 1e-12; // Upper Darsi viscosity cutoff
-const double stpmax = 2e-4;  // / dy * faultwidth; // Max gridstep fraction for marker displacement in the channel
-const double stpmax1 = 6e-5; // / dy * faultwidth; // Max gridstep fraction for marker displacement
-
-//Boundary conditions
-const double bcupper = -1e-9;
-const double bclower = 1e-9;
-const double bcvyflower = 0; // -1e-12;
-// bcvxfleft = bcvyflower * xsize / ysize;
-
-// Entering time cycle
-double timesum = 0;
-const double dtelastic0 = 5e8; // elastic timestep
-double dt = dtelastic0;
-const double dtmin = 1e-4;
-
-const double ascale = 1.;
-
-// Timesteps between visualization frames
-const int savestep = 10;  // storage periodicity
-string nname = "h_mec_";  // storage filename
-const int niterglobal = 10000; // Max number of global iterations
-const int ynlastmax = 499; // Max number of iterations without changing timestep
-const int dtstep = 5; // Min number of plastic iterations before changing dt
-const double vratiomax = 0.001; // Max change of velocity between iterations
-const double dtkoef = 1.1; // Koefficient for decrease of previous timestep
-const double dtkoefup = 1.2; // Koefficient for increase of previous timestep
-const double dtkoefv = 1.001; // koef for velocity - based timestep reduction
-const double errmin = 1e2; // min LSQ err for stoping iterations
-const double etawt = 0.0;
-const double syieldmin = 1e-3;
-const double tyield = 1;
-bool yndtdecrease = true;
-double plstrain = 0; // Plastic strain for dilatancy
-int iterstep;
-
-const double lower_block = ysize / 2. + dy;
-const double upper_block = ysize / 2. - dy;
-
-// ========================
-// Lagrangian solid markers
-const int Nx_markers = (Nx - 1) * 4; // Marker resolution in x - dection
-const int Ny_markers = (Ny - 1) * 4; // Marker resolution in y direction
-const double dxms = xsize / (double)Nx_markers; // Standard marker horizontal step
-const double dyms = ysize / (double)Ny_markers; // Standard marker vertical step
-const int marknum = Nx_markers * Ny_markers; // Total number of markers
-
-// These variables are only used once and could be inserted directly as numbers
-const double aa1 = 20.93, aa2 = 35.28, aa3 = 2.34;
-const double bb1 = 0.99, bb2 = 44.39, bb3 = 0.73;
-const double cc1 = 0.37, cc2 = 3.54, cc3 = 0.47;
-
-// Plastic Strain:
-// const double gammap = plstrain * 200;
-
-const double pi = M_PI;
 
 // Basic nodes
 MatXd OM0(Ny, Nx);  // Old state parameter
@@ -315,7 +177,11 @@ VecXd S(N);
 PardisoLU<SparseMatrix<double>> solver;
 
 // variable type declaration
-int ynlast;
+int ynlast, iterstep;
+
+double timesum = 0;
+double dt = dtelastic0;
+bool yndtdecrease = true;
 
 double dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy;
 
@@ -340,8 +206,8 @@ VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timestep
 // ====================================================================================
 
 // lambda function that rounds towards 0
-auto fix = [](double x) {
-  return x < 0. ? (int)ceil(x) : (int)floor(x);
+auto fix = [](double temp) {
+  return temp < 0. ? (int)ceil(temp) : (int)floor(temp);
 };
 
 // lambda function that checks if a value is between a min and max value
@@ -434,10 +300,10 @@ int main() {
             j++;
         }
 
-        hsize_t dim2[1] = {13};
+        hsize_t dim2[1] = {15};
         VecXd temp = read_vector(filename, group_values, "values", dim2);
         timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); KXX = temp(4); KXY = temp(5); KSK = temp(6);
-        BETADRAINED = temp(7); dtlapusta = temp(8); pfscale = temp(9); ptscale = temp(10); Vmax = temp(11); maxvxy = temp(12);
+        BETADRAINED = temp(7); dtlapusta = temp(8); pfscale = temp(9); ptscale = temp(10); Vmax = temp(11); maxvxy = temp(12); dt = temp(13), yndtdecrease = temp(14);
 
         timestep++;
     } else {
@@ -818,7 +684,7 @@ int main() {
         
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
             // Limiting viscosity
-            double etamincur = shearmod * dt * 1e-4;
+            double etamincur = dt * shearmod * 1e-4;
             
             // External P - nodes: symmetry
             copy_bounds(pt);
@@ -978,10 +844,10 @@ int main() {
                         double gx_dt_dRHOdy = gx * dt * dRHOdy / 4.;
                         double dx_dy = dx * dy;
                         Trip.insert(Trip.end(), {Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt), Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2), 
-                                        Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2), Trp(kx, kx - 6, ETAXY1 / dy2), Trp(kx, kx + 6, ETAXY2 / dy2), /* vxs3, vxs1, vxs5, vxs2, vxs4 */
-                                        Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - gx_dt_dRHOdy), Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - gx_dt_dRHOdy),
-                                        Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - gx_dt_dRHOdy), Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - gx_dt_dRHOdy), /* vys1, vys2, vys3, vys4 */
-                                        Trp(kx, kp, ptscale / dx), Trp(kx, kp + Ny1 * 6, -ptscale / dx)}); /* Pt1', Pt2' */
+                                    Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2), Trp(kx, kx - 6, ETAXY1 / dy2), Trp(kx, kx + 6, ETAXY2 / dy2), /* vxs3, vxs1, vxs5, vxs2, vxs4 */
+                                    Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - gx_dt_dRHOdy), Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - gx_dt_dRHOdy),
+                                    Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - gx_dt_dRHOdy), Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - gx_dt_dRHOdy), /* vys1, vys2, vys3, vys4 */
+                                    Trp(kx, kp, ptscale / dx), Trp(kx, kp + Ny1 * 6, -ptscale / dx)}); /* Pt1', Pt2' */
                         // Right part
                         R(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
@@ -1066,10 +932,10 @@ int main() {
                         double gy_dt_dRHOdx = gy * dt * dRHOdx / 4.;
                         double dx_dy = dx * dy;
                         Trip.insert(Trip.end(), {Trp(ky, ky, -(ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt), Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2),
-                                        Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2), Trp(ky, ky - 6, ETAYY1 / dy2), Trp(ky, ky + 6, ETAYY2 / dy2), /* vys3, vys1, vys5, vys2, vys4 */
-                                        Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - gy_dt_dRHOdx), Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - gy_dt_dRHOdx),
-                                        Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - gy_dt_dRHOdx), Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - gy_dt_dRHOdx), /* vxs1, vxs2, vxs3, vxs4 */
-                                        Trp(ky, kp, ptscale / dy), Trp(ky, kp + 6, -ptscale / dy)}); /* Pt1', Pt2' */
+                                    Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2), Trp(ky, ky - 6, ETAYY1 / dy2), Trp(ky, ky + 6, ETAYY2 / dy2), /* vys3, vys1, vys5, vys2, vys4 */
+                                    Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - gy_dt_dRHOdx), Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - gy_dt_dRHOdx),
+                                    Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - gy_dt_dRHOdx), Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - gy_dt_dRHOdx), /* vxs1, vxs2, vxs3, vxs4 */
+                                    Trp(ky, kp, ptscale / dy), Trp(ky, kp + 6, -ptscale / dy)}); /* Pt1', Pt2' */
                         // Right part
                         R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
@@ -1092,7 +958,7 @@ int main() {
                         double KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
                         Trip.insert(Trip.end(), {Trp(kp, kx - Ny1 * 6, -1. / dx), Trp(kp, kx, 1. / dx), /* vxs1, vxs2 */ Trp(kp, ky - 6, -1. / dy), Trp(kp, ky, 1. / dy), /* vys1, vys2 */
-                                        Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt)), Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))}); /* Pt, Pf */
+                                    Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt)), Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))}); /* Pt, Pf */
                         // Right part
                         R(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
                     }
@@ -1138,7 +1004,7 @@ int main() {
                         //
                         // Left part
                         Trip.insert(Trip.end(), {Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * ascale / dt), Trp(kxf, kx, -RHOFX(i, j) * ascale / dt), /* vxD, vxs */
-                                        Trp(kxf, kpf, pfscale / dx), Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)}); /* Pf1', Pf2' */
+                                    Trp(kxf, kpf, pfscale / dx), Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)}); /* Pf1', Pf2' */
                         // Right part
                         R(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
                     }
@@ -1187,7 +1053,7 @@ int main() {
                         //
                         // Left part
                         Trip.insert(Trip.end(), {Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * ascale / dt), Trp(kyf, ky, -RHOFY(i, j) * ascale / dt), /* vyD, vys */
-                                        Trp(kyf, kpf, pfscale / dy), Trp(kyf, kpf + 6, -pfscale / dy)}); /* Pf1', Pf2' */
+                                    Trp(kyf, kpf, pfscale / dy), Trp(kyf, kpf + 6, -pfscale / dy)}); /* Pf1', Pf2' */
                         // Right part
                         R(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
                     }
@@ -1219,7 +1085,7 @@ int main() {
                         KSK = (BETADRAINED - BETASOLID) / (BETADRAINED - BETASOLID + POR(i, j) * (BETAFLUID - BETASOLID));
                         // Left part
                         Trip.insert(Trip.end(), {Trp(kpf, kxf - Ny1 * 6, -1. / dx), Trp(kpf, kxf, 1. / dx), /* vxs1, vxs2 */ Trp(kpf, kyf - 6, -1. / dy), Trp(kpf, kyf, 1. / dy), /* vys1, vys2 */
-                                        Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt)), Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))}); /* Pt, Pf */
+                                    Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt)), Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))}); /* Pt, Pf */
                         // Right part
                         R(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1. / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
@@ -1246,18 +1112,13 @@ int main() {
                 for (int i = 0; i < Ny1; i++) {
                     // Global indexes for vx, vy, P
                     int kp = (j * Ny1 + i) * 6;
-                    int kx = kp + 1;
-                    int ky = kp + 2;
-                    int kpf = kp + 3;
-                    int kxf = kp + 4;
-                    int kyf = kp + 5;
                     // Reload solution
                     pt(i, j) = S(kp) * ptscale;
-                    vxs(i, j) = S(kx);
-                    vys(i, j) = S(ky);
-                    pf(i, j) = S(kpf) * pfscale;
-                    vxD(i, j) = S(kxf);
-                    vyD(i, j) = S(kyf);
+                    vxs(i, j) = S(kp + 1);
+                    vys(i, j) = S(kp + 2);
+                    pf(i, j) = S(kp + 3) * pfscale;
+                    vxD(i, j) = S(kp + 4);
+                    vyD(i, j) = S(kp + 5);
                 }
             }
 
@@ -1344,7 +1205,7 @@ int main() {
                             double ptB, pfB;
 
                             // SXX, pt are averaged from four surrounding pressure nodes
-                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow(sxx_temp_4, 2) + .5 * pow(syy_temp_4, 2) + .5 * pow(-sxx_temp_4 - syy_temp_4, 2)); // - can be changed to + as term is squared
+                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow(sxx_temp_4, 2) + .5 * pow(syy_temp_4, 2) + .5 * pow(-sxx_temp_4 - syy_temp_4, 2)); // - can be changed to + as term is squared ???
                             ptB = (pt(i, j) + pt(i + 1, j) + pt(i, j + 1) + pt(i + 1, j + 1)) / 4.;
                             pfB = (pf(i, j) + pf(i + 1, j) + pf(i, j + 1) + pf(i + 1, j + 1)) / 4.;
                             // Computing "elastic" stress invariant
@@ -1363,21 +1224,18 @@ int main() {
                             // Compute old power law strain rate
                             double SIIB1 = SIIB(i, j);
                             
-                            //Compute slip velocity for current stress invariant and state
-                            double V = 2 * V0 * sinh(max(SIIB1, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
-                            
-                            double EIISLIP = V / dx / 2.;
+                            // Compute slip velocity for current stress invariant and state
+                            double EIISLIP = V0 * sinh(max(SIIB1, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp) / dx;
                             
                             // Compute new ETAVP
                             double ETAPL = SIIB1 / 2. / EIISLIP;
                             double ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
-                            double kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                            double SIIB2 = siiel * kfxy1;
+                            double SIIB2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP);
                             double DSIIB1 = SIIB2 - SIIB1;
                             
-                            //Compute slip velocity for current stress invariant and state
-                            V = 2 * V0 * sinh(max(SIIB2, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
+                            // Compute slip velocity for current stress invariant and state
+                            double V = 2 * V0 * sinh(max(SIIB2, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
                             
                             EIISLIP = V / dx / 2.;
                             
@@ -1385,8 +1243,7 @@ int main() {
                             ETAPL = SIIB2 / 2. / EIISLIP;
                             ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
-                            kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                            double DSIIB2 = siiel * kfxy1 - SIIB2;
+                            double DSIIB2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP) - SIIB2;
                             double SIIB4 = 0.;
                             
                             if ((DSIIB1 >= 0 && DSIIB2 <= 0) || (DSIIB1 <= 0 && DSIIB2 >= 0)) {
@@ -1404,8 +1261,7 @@ int main() {
                                     ETAPL = SIIB4 / 2. / EIISLIP;
                                     ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                                     // Compute new stress invariant
-                                    kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                                    DSIIB = siiel * kfxy1 - SIIB4;
+                                    DSIIB = siiel * ETAVP / (GGG(i, j) * dt + ETAVP) - SIIB4;
                                     if ((DSIIB >= 0 && DSIIB1 >= 0) || (DSIIB <= 0 && DSIIB1 <= 0)) {
                                         SIIB1 = SIIB4;
                                     } else {
@@ -1420,9 +1276,7 @@ int main() {
                                 OM5(i, j) = log(exp(OM0(i, j)) * (1 - V * dt / lrsf_temp) + V0 * dt / lrsf_temp);
                             }
                             
-                            
-                            kfxy1 = ETAVP / (GGG(i, j) * dt + ETAVP);
-                            double SIGMA2 = siiel * kfxy1;
+                            double SIGMA2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP);
                             
                             // Compute yielding stress
                             double syield = max(syieldmin, (ptB - pfB) * arsf_temp * asinh(V / 2. / V0 * exp((brsf_temp * OM5(i, j) + fric_temp) / arsf_temp)));
@@ -1441,7 +1295,7 @@ int main() {
                             // "/ BETASOLID" -> Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
                             double vi = (3. / BETASOLID - g_temp) / (6. / BETASOLID + g_temp);
                             double k = g_temp / (pi * (1 - vi) * dx);
-                            double xi = .25 * pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) - k * lrsf_temp / arsf_temp / prB;
+                            double xi = pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) / 4 - k * lrsf_temp / arsf_temp / prB;
                             double dTETAmax;
                             if (xi < 0) {
                                 dTETAmax = min(1. - (brsf_temp - arsf_temp) * prB / (k * lrsf_temp), .2);
@@ -1874,7 +1728,7 @@ int main() {
         cout << "iter - iterations:   " << iterstep + 1 << endl;
         cout << "global - iterations: " << ynlast + 1 << endl;
         
-        if (timesum == dt) {
+        if (timestep == 1) {
             ofstream out_fault;
             out_fault.open("x_fault.txt");
             out_fault << x << endl;
@@ -1886,65 +1740,61 @@ int main() {
             out_rsf.close();
         }
             
-        if (timesum_plus < timesum) {
-            // ========== save slip rate
-            ofstream out_Vslip("EVO_Vslip.txt", ios_base::app | ios_base::out);
-            out_Vslip << timesum << "    " << dt << "    " << VSLIPB.row(line_fault) << endl;
-            out_Vslip.close();
-            
-            // ========== save viscosity
-            ofstream out_viscosity("EVO_viscosity.txt", ios_base::app | ios_base::out);
-            out_viscosity << timesum << "    " << dt << "    " << ETA.row(line_fault) << endl;
-            out_viscosity.close();
-            
-            // ========== save fluid 
-            ofstream out_press_flu("EVO_press_flu.txt", ios_base::app | ios_base::out);
-            out_press_flu << timesum << "    " << dt << "    " << pf.row(line_fault) << endl;
-            out_press_flu.close();
-            
-            // ========== save effective pressure
-            ofstream out_press_eff("EVO_press_eff.txt", ios_base::app | ios_base::out);
-            MatXd P_diff = pt - pf;
-            out_press_eff << timesum << "    " << dt << "    " << P_diff.row(line_fault) << endl;
-            out_press_eff.close();
-            
-            // ========== save SigmaY
-            ofstream out_SigmaY("EVO_SigmaY.txt", ios_base::app | ios_base::out);
-            out_SigmaY << timesum << "    " << dt << "    " << SigmaY.row(line_fault) << endl;
-            out_SigmaY.close();
-            
-            // ========== save SII
-            ofstream out_Sii("EVO_Sii.txt", ios_base::app | ios_base::out);
-            out_Sii << timesum << "    " << dt << "    " << SII_fault.row(line_fault) << endl;
-            out_Sii.close();
-            
-            // ========== save Theta
-            ofstream out_Theta("EVO_Theta.txt", ios_base::app | ios_base::out);
-            out_Theta << timesum << "    " << dt << "    " << OM.row(line_fault) << endl;
-            out_Theta.close();
-            
-            // ========== save viscous compaction
-            ofstream out_Visc_comp("EVO_Visc_comp.txt", ios_base::app | ios_base::out);
-            out_Visc_comp << timesum << "    " << dt << "    " << VIS_COMP.row(line_fault) << endl;
-            out_Visc_comp.close();
-            
-            // ========== save elastic compaction
-            ofstream out_Elast_comp("EVO_Elast_comp.txt", ios_base::app | ios_base::out);
-            out_Elast_comp << timesum << "    " << dt << "    " << EL_DECOM.row(line_fault) << endl;
-            out_Elast_comp.close();
+        // ========== save slip rate
+        ofstream out_Vslip("EVO_Vslip.txt", ios_base::app | ios_base::out);
+        out_Vslip << timesum << "    " << dt << "    " << VSLIPB.row(line_fault) << endl;
+        out_Vslip.close();
+        
+        // ========== save viscosity
+        ofstream out_viscosity("EVO_viscosity.txt", ios_base::app | ios_base::out);
+        out_viscosity << timesum << "    " << dt << "    " << ETA.row(line_fault) << endl;
+        out_viscosity.close();
+        
+        // ========== save fluid 
+        ofstream out_press_flu("EVO_press_flu.txt", ios_base::app | ios_base::out);
+        out_press_flu << timesum << "    " << dt << "    " << pf.row(line_fault) << endl;
+        out_press_flu.close();
+        
+        // ========== save effective pressure
+        ofstream out_press_eff("EVO_press_eff.txt", ios_base::app | ios_base::out);
+        MatXd P_diff = pt - pf;
+        out_press_eff << timesum << "    " << dt << "    " << P_diff.row(line_fault) << endl;
+        out_press_eff.close();
+        
+        // ========== save SigmaY
+        ofstream out_SigmaY("EVO_SigmaY.txt", ios_base::app | ios_base::out);
+        out_SigmaY << timesum << "    " << dt << "    " << SigmaY.row(line_fault) << endl;
+        out_SigmaY.close();
+        
+        // ========== save SII
+        ofstream out_Sii("EVO_Sii.txt", ios_base::app | ios_base::out);
+        out_Sii << timesum << "    " << dt << "    " << SII_fault.row(line_fault) << endl;
+        out_Sii.close();
+        
+        // ========== save Theta
+        ofstream out_Theta("EVO_Theta.txt", ios_base::app | ios_base::out);
+        out_Theta << timesum << "    " << dt << "    " << OM.row(line_fault) << endl;
+        out_Theta.close();
+        
+        // ========== save viscous compaction
+        ofstream out_Visc_comp("EVO_Visc_comp.txt", ios_base::app | ios_base::out);
+        out_Visc_comp << timesum << "    " << dt << "    " << VIS_COMP.row(line_fault) << endl;
+        out_Visc_comp.close();
+        
+        // ========== save elastic compaction
+        ofstream out_Elast_comp("EVO_Elast_comp.txt", ios_base::app | ios_base::out);
+        out_Elast_comp << timesum << "    " << dt << "    " << EL_DECOM.row(line_fault) << endl;
+        out_Elast_comp.close();
 
-            // ========== save vx Darcy
-            ofstream out_EVO_vxD("EVO_vxD.txt", ios_base::app | ios_base::out);
-            out_EVO_vxD << timesum << "    " << dt << "    " << vxD.row(line_fault) << endl;
-            out_EVO_vxD.close();
-            
-            // ========== save time, dt, vmax
-            ofstream out_data("EVO_data.txt", ios_base::app | ios_base::out);
-            out_data << setw(20) << timesum << setw(20) << dt << setw(20) << Vmax << setw(20) << ynlast << setw(20) << iterstep << endl;
-            out_data.close();
-            
-            timesum_plus = timesum;
-        }
+        // ========== save vx Darcy
+        ofstream out_EVO_vxD("EVO_vxD.txt", ios_base::app | ios_base::out);
+        out_EVO_vxD << timesum << "    " << dt << "    " << vxD.row(line_fault) << endl;
+        out_EVO_vxD.close();
+        
+        // ========== save time, dt, vmax
+        ofstream out_data("EVO_data.txt", ios_base::app | ios_base::out);
+        out_data << setw(20) << timesum << setw(20) << dt << setw(20) << Vmax << setw(20) << ynlast << setw(20) << iterstep << endl;
+        out_data.close();
         
         if (timestep % savestep == 0) {
             ofstream out_file;
@@ -2002,9 +1852,9 @@ int main() {
                 j++;
             }
 
-            VecXd temp(13);
-            temp << timesum, dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy;
-            hsize_t dim2[1] = {13};
+            VecXd temp(15);
+            temp << timesum, dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy, dt, yndtdecrease;
+            hsize_t dim2[1] = {15};
             add_vector(save_file_name, group_values, temp, "values", dim2);
         }
     }
