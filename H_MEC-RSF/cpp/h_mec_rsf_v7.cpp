@@ -14,8 +14,8 @@ with variable viscosity and Darsi + continuity equations
 Total X - Stokes: dSIGMAxxt' / dx + dSIGMAxyt' / dy - dPt / dx = -RHOt * gx
 Total Y - Stokes: dSIGMAyxt' / dx + dSIGMAyyt' / dy - dPt / dy = -RHOt * gy
 Solid Continuity: dVxs / dx + dVys / dy + (Pt - Pf) / ETAbulk = 0
-Fluid X - Darsi:  - ETAfluid / K * VxD - dPf / dx = -RHOf * gx
-Fluid Y - Darsi:  - ETAfluid / K * VyD - dPf / dy = -RHOf * gy
+Fluid X - Darsi: - ETAfluid / K * VxD - dPf / dx = -RHOf * gx
+Fluid Y - Darsi: - ETAfluid / K * VyD - dPf / dy = -RHOf * gy
 Fluid Continuity: dVxD / dx + dVyD / dy - (Pt - Pf) / ETAbulk = 0
 + staggered grid
 + P - v formulation
@@ -37,7 +37,7 @@ Fluid Continuity: dVxD / dx + dVyD / dy - (Pt - Pf) / ETAbulk = 0
 #include <chrono>
 #include <H5Cpp.h>
 
-#define VARIABLE_NAME(Variable) (#Variable)
+#include "hdf5.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -59,7 +59,6 @@ const int num_timesteps = 100; // very small number for testing
 // ========================================
 // Define Numerical model
 // Eulerian basic grid
-
 const double xsize = 40000.; // size in horizontal direction, m
 const double ysize = 10000.; // size in vertical direction, m
 const int Nx = 401;          // number of grid steps in horizontal directions
@@ -216,7 +215,6 @@ MatXd ETA(Ny, Nx);
 MatXd ETA0(Ny, Nx);
 MatXd ETA1(Ny, Nx);
 MatXd ETA5(Ny, Nx);
-MatXd ETA50(Ny, Nx);
 MatXd ETA00(Ny, Nx);
 MatXd IETAPLB(Ny, Nx);
 MatXd SXY(Ny, Nx);
@@ -296,55 +294,6 @@ VecXd vy0m(marknum);         // Marker vertical velocity
 VecXd ptfm(marknum);         // Pt - Pf, Pa
 VecXd amursfm(marknum);      // RSF a / mu parameter
 
-// declaration of matrices that are set to zero each timestep
-MatXd ETA0SUM(Ny, Nx);
-MatXd COHCSUM(Ny, Nx);
-MatXd FRICSUM(Ny, Nx);
-MatXd DILCSUM(Ny, Nx);
-MatXd COHTSUM(Ny, Nx);
-MatXd FRITSUM(Ny, Nx);
-MatXd WTSUM(Ny, Nx);
-
-// Interpolate ETA, RHO to nodal points
-// Basic nodes
-MatXd RHOSUM(Ny, Nx);
-MatXd ETASUM(Ny, Nx);
-MatXd KKKSUM(Ny, Nx);
-MatXd TTTSUM(Ny, Nx);
-MatXd SXYSUM(Ny, Nx);
-MatXd GGGSUM(Ny, Nx);
-
-//LDZ
-MatXd OM0SUM(Ny, Nx); // Old state parameter
-MatXd OMSUM(Ny, Nx); // State parameter
-MatXd ARSFSUM(Ny, Nx); // a - parameter of RSF
-MatXd BRSFSUM(Ny, Nx); // b - parameter of RSF
-MatXd LRSFSUM(Ny, Nx); // L - parameter of RSF
-
-// Pressure nodes
-MatXd ETAPSUM(Ny1, Nx1);
-MatXd ETAP0SUM(Ny1, Nx1);
-MatXd ETAB0SUM(Ny1, Nx1);
-MatXd PORSUM(Ny1, Nx1);
-MatXd SXXSUM(Ny1, Nx1);
-MatXd SYYSUM(Ny1, Nx1);
-MatXd GGGPSUM(Ny1, Nx1);
-MatXd WTPSUM(Ny1, Nx1);
-// Vx nodes
-MatXd RHOXSUM(Ny1, Nx1);
-MatXd RHOFXSUM(Ny1, Nx1);
-MatXd ETADXSUM(Ny1, Nx1);
-MatXd PORXSUM(Ny1, Nx1);
-MatXd VX0SUM(Ny1, Nx1);
-MatXd WTXSUM(Ny1, Nx1);
-// Vy nodes
-MatXd RHOYSUM(Ny1, Nx1);
-MatXd RHOFYSUM(Ny1, Nx1);
-MatXd ETADYSUM(Ny1, Nx1);
-MatXd PORYSUM(Ny1, Nx1);
-MatXd VY0SUM(Ny1, Nx1);
-MatXd WTYSUM(Ny1, Nx1);
-
 MatXd ESP(Ny, Nx);
 MatXd EXY(Ny, Nx);
 MatXd EXX(Ny1, Nx1);
@@ -361,7 +310,6 @@ MatXd VIS_COMP(Ny1, Nx1);
 // (3) Defining global matrixes
 // according to the global number of unknowns
 // Sparse Matrix L is not yet defined as it will be built from a set of Triplets each step
-int kp, kx, ky, kpf, kxf, kyf; // this could maybe be made into a vector
 VecXd R(N); // Vector of the right parts of equations
 VecXd S(N);
 PardisoLU<SparseMatrix<double>> solver;
@@ -390,152 +338,6 @@ VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timestep
 // ====================================================================================
 // end global variable declarations
 // ====================================================================================
-
-// hdf5 to store results
-/*
-inputs:
-    string filename
-*/
-void create_file(const string &filename) {
-    H5File *file = new H5File(filename, H5F_ACC_TRUNC);
-
-    delete file;
-}
-
-/*
-inputs:
-    string filename
-    string groupname
-*/
-void add_group(const string &filename, const string &groupname) {
-    H5File *file = new H5File(filename, H5F_ACC_RDWR);
-    Group* group = new Group(file->createGroup("/" + groupname));
-
-    delete group;
-    delete file;
-}
-
-/*
-inputs:
-    string filename
-    string groupname
-    MatrixXd data -> pointer to matrix to store
-    string dataset_name -> name the stored data
-    hsize_t* dims -> 2 dimensional array with dimensions (x and y) of stored data
-*/
-void add_matrix(const string &filename, const string &groupname, const MatXd& data, const string &dataset_name, hsize_t* dims) {
-    H5File *file = new H5File(filename, H5F_ACC_RDWR);
-    Group *group = new Group(file->openGroup(groupname));
-    DataSpace *dataspace = new DataSpace(2, dims);
-    DataSet *dataset = new DataSet(file->createDataSet("/" + groupname + "/" + dataset_name, PredType::NATIVE_DOUBLE, *dataspace));
-
-    double out[dims[0]][dims[1]];
-    for (int i = 0; i < dims[0]; i++) {
-        for (int j = 0; j < dims[1]; j++) {
-            out[i][j] = data(i, j);
-        }
-    }
-
-    dataset->write(out, PredType::NATIVE_DOUBLE);
-
-    delete dataset;
-    delete dataspace;
-    delete group;
-    delete file;
-}
-
-/*
-inputs:
-    string filename
-    string groupname
-    VectorXd data -> pointer to vector to store
-    string dataset_name -> name the stored data
-    hsize_t* dims -> 1 dimensional array with dimension (x) of stored data
-*/
-void add_vector(const string &filename, const string &groupname, const VecXd& data, const string &dataset_name, hsize_t* dims) {
-    H5File *file = new H5File(filename, H5F_ACC_RDWR);
-    Group *group = new Group(file->openGroup(groupname));
-    DataSpace *dataspace = new DataSpace(1, dims);
-    DataSet *dataset = new DataSet(file->createDataSet("/" + groupname + "/" + dataset_name, PredType::NATIVE_DOUBLE, *dataspace));
-
-    double input[dims[0]];
-    for (int i = 0; i < dims[0]; i++) {
-        input[i] = data(i);
-    }
-
-    dataset->write(input, PredType::NATIVE_DOUBLE);
-
-    delete dataset;
-    delete dataspace;
-    delete group;
-    delete file;
-}
-
-/*
-inputs:
-    string filename
-    string groupname
-    string dataset_name -> name the stored data
-    hsize_t* dims -> 2 dimensional array with dimensions (x and y) of stored data
-output:
-    MatrixXd data_out -> data saved in "dataset_name"
-*/
-MatXd read_matrix(const string &filename, const string &groupname, const string &dataset_name, hsize_t* dims) {
-    MatXd data_out(dims[0], dims[1]);
-    double out[dims[0]][dims[1]];
-    
-    H5File *file = new H5File(filename, H5F_ACC_RDONLY);
-    Group *group = new Group(file->openGroup(groupname));
-    DataSet *dataset = new DataSet(group->openDataSet(dataset_name));
-    DataSpace dataspace = dataset->getSpace();
-
-    dataset->read(out, PredType::NATIVE_DOUBLE, dataspace);
-
-    for (int i = 0; i < dims[0]; i++) {
-        for (int j = 0; j < dims[1]; j++) {
-            data_out(i, j) = out[i][j];
-        }
-    }
-
-    delete dataset;
-    delete group;
-    delete file;
-
-    return data_out;
-}
-
-/*
-inputs:
-    string filename
-    string groupname
-    string dataset_name -> name the stored data
-    hsize_t* dims -> 1 dimensional array with dimension (x) of stored data
-output:
-    VectorXd data_out -> data saved in "dataset_name"
-*/
-VecXd read_vector(const string &filename, const string &groupname, const string &dataset_name, hsize_t* dims) {
-    VecXd data_out(dims[0]);
-    double out[dims[0]];
-    
-    H5File *file = new H5File(filename, H5F_ACC_RDONLY);
-    Group *group = new Group(file->openGroup(groupname));
-    DataSet *dataset = new DataSet(group->openDataSet(dataset_name));
-    DataSpace dataspace = dataset->getSpace();
-
-    dataset->read(out, PredType::NATIVE_DOUBLE, dataspace);
-
-    for (int i = 0; i < dims[0]; i++) {
-        data_out(i) = out[i];
-    }
-
-    delete dataset;
-    delete group;
-    delete file;
-
-    return data_out;
-}
-
-// end hdf5
 
 // lambda function that rounds towards 0
 auto fix = [](double x) {
@@ -591,21 +393,20 @@ int main() {
         string filename = nname + to_string(timestep) + ".h5";
         string group_matrix_small = "Matrix_small";
         string group_matrix_large = "Matrix_large";
-        string group_vector = "Vector";
+        string group_vector_long = "Vector_long";
+        string group_vector_short = "Vector_short";
         string group_values = "Value";
 
         // read dummy matrix for testing
         hsize_t dims1[2] = {Ny, Nx};
-        string matrix_names_nxny[29] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA50", "ETA00",
+        string matrix_names_nxny[28] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00",
                                         "IETAPLB", "SXY", "SXY0", "YNY0", "YNY00", "KKK", "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "STRPLB", "VSLIPB"}; // {"names"} has to be the same as in *matrix_nxny
         int j = 0;
-        for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA50, ETA00,
+        for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00,
                        IETAPLB, SXY, SXY0, YNY0, YNY00, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB, VSLIPB}) { // {names} *matrix_nxny
             i = read_matrix(filename, group_matrix_small, matrix_names_nxny[j], dims1);
-            cout << i << endl;
             j++;
         }
-        cout << SIIB << endl;
 
         hsize_t dims2[2] = {Ny1, Nx1};
         string matrix_names_nx1ny1[37] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0", "pt_ave", "pf_ave",
@@ -616,22 +417,27 @@ int main() {
             i = read_matrix(filename, group_matrix_large, matrix_names_nx1ny1[j], dims2);
             j++;
         }
-        cout << pt << endl;
         
-        hsize_t dim[1] = {num_timesteps};
+        hsize_t dim1[1] = {num_timesteps};
         string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
         j = 0;
         for (auto i : {timesumcur, dtcur, maxvxsmod, minvxsmod, maxvysmod, minvysmod}) { // {names} *vec
-            i = read_vector(filename, group_vector, vector_names[j], dim);
+            i = read_vector(filename, group_vector_long, vector_names[j], dim1);
             j++;
         }
 
-        VecXd temp = read_vector(filename, group_values, "values", dim);;
+        hsize_t dim3[1] = {marknum};
+        string vector_names_marker[14] = {"t_marker", "rhom", "etasm", "gsm", "cohescm", "cohestm", "frictcm", "dilatcm", "fricttm", "kkkm", "rhofm", "etafm", "xm", "ym"}; // {"names"} has to be the same as in *vec2
         j = 0;
-        for (auto i : {timesum}) {
-            i = temp(j);
+        for (auto i : {t_marker, rhom, etasm, gsm, cohescm, cohestm, frictcm, dilatcm, fricttm, kkkm, rhofm, etafm, xm, ym}) { // {names} *vec2
+            i = read_vector(filename, group_vector_short, vector_names_marker[j], dim3);
             j++;
         }
+
+        hsize_t dim2[1] = {13};
+        VecXd temp = read_vector(filename, group_values, "values", dim2);
+        timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); KXX = temp(4); KXY = temp(5); KSK = temp(6);
+        BETADRAINED = temp(7); dtlapusta = temp(8); pfscale = temp(9); ptscale = temp(10); Vmax = temp(11); maxvxy = temp(12);
 
         timestep++;
     } else {
@@ -704,8 +510,6 @@ int main() {
         rhofm = VecXd::Constant(marknum, 1000);
         etafm = VecXd::Constant(marknum, 1e-3);
 
-        gm = gsm; // * (1 - porm(m));
-
         // #pragma omp parallel for (slower with n = 4)
         for (int m = 0; m < marknum; m++) {
             // Define randomized regular coordinates
@@ -733,6 +537,31 @@ int main() {
 
         R.setZero();
     }
+
+    gm = gsm; // * (1 - porm(m));
+
+    // declaration of matrices that are set to zero each timestep
+    MatXd ETA0SUM(Ny, Nx), COHCSUM(Ny, Nx), FRICSUM(Ny, Nx), DILCSUM(Ny, Nx), COHTSUM(Ny, Nx), FRITSUM(Ny, Nx), WTSUM(Ny, Nx);
+
+    // Interpolate ETA, RHO to nodal points
+    // Basic nodes
+    MatXd RHOSUM(Ny, Nx), ETASUM(Ny, Nx), KKKSUM(Ny, Nx), TTTSUM(Ny, Nx), SXYSUM(Ny, Nx), GGGSUM(Ny, Nx);
+
+    //LDZ
+    MatXd OM0SUM(Ny, Nx); // Old state parameter
+    MatXd OMSUM(Ny, Nx); // State parameter
+    MatXd ARSFSUM(Ny, Nx); // a - parameter of RSF
+    MatXd BRSFSUM(Ny, Nx); // b - parameter of RSF
+    MatXd LRSFSUM(Ny, Nx); // L - parameter of RSF
+
+    // Pressure nodes
+    MatXd ETAPSUM(Ny1, Nx1), ETAP0SUM(Ny1, Nx1), ETAB0SUM(Ny1, Nx1), PORSUM(Ny1, Nx1), SXXSUM(Ny1, Nx1), SYYSUM(Ny1, Nx1), GGGPSUM(Ny1, Nx1), WTPSUM(Ny1, Nx1);
+    // Vx nodes
+    MatXd RHOXSUM(Ny1, Nx1), RHOFXSUM(Ny1, Nx1), ETADXSUM(Ny1, Nx1), PORXSUM(Ny1, Nx1), VX0SUM(Ny1, Nx1), WTXSUM(Ny1, Nx1);
+    // Vy nodes
+    MatXd RHOYSUM(Ny1, Nx1), RHOFYSUM(Ny1, Nx1), ETADYSUM(Ny1, Nx1), PORYSUM(Ny1, Nx1), VY0SUM(Ny1, Nx1), WTYSUM(Ny1, Nx1);
+
+    MatXd ETA50(Ny, Nx);
     
     // /////////////////////////////////////////////////////////////////////////////////////// 
     // actual computations start here
@@ -744,8 +573,6 @@ int main() {
                        RHOXSUM, RHOFXSUM, ETADXSUM, PORXSUM, VX0SUM, WTXSUM, RHOYSUM, RHOFYSUM, ETADYSUM, PORYSUM, VY0SUM, WTYSUM}) {
             i.setZero();
         }
-
-        auto start = hrc::now();
         
         // Cycle on markers
         #pragma omp parallel for // about 3-4x faster with n = 4
@@ -909,9 +736,6 @@ int main() {
             WTYSUM.block(i, j, 2, 2) += wtm;
         } // ends loop through markers
 
-        auto stop = hrc::now();
-        cout << chrono::duration_cast<microseconds>(stop - start).count() << endl;
-
         // Computing ETA and RHO
         for (int i = 0; i < Ny; i++) {
             // Basic nodes
@@ -1065,16 +889,17 @@ int main() {
             // 5)Composing global matrixes L(), R()
 
             vector<Trp> Trip; // define triplet list to build sparse matrix
+            Trip.reserve(N * 10);
             
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Computing global indexes for vx, vy, p
-                    kp = (j * Ny1 + i) * 6;
-                    kx = kp + 1;
-                    ky = kp + 2;
-                    kpf = kp + 3;
-                    kxf = kp + 4;
-                    kyf = kp + 5;
+                    int kp = (j * Ny1 + i) * 6;
+                    int kx = kp + 1;
+                    int ky = kp + 2;
+                    int kpf = kp + 3;
+                    int kxf = kp + 4;
+                    int kyf = kp + 5;
                     
                     // 5a) Composing equation for vxs
                     if (i == 0 || i == Ny || j == 0 || j >= Nx - 1) {
@@ -1087,30 +912,26 @@ int main() {
                         // Upper boundary
                         // prescribed velocity
                         if (i == 0 && j < Nx) {
-                            Trip.push_back(Trp(kx, kx, 1));
-                            Trip.push_back(Trp(kx, kx + 6, 1));
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx + 6, 1)});
                             R(kx) = 2 * bcupper;
                         }
                         
                         // Lower boundary
                         // prescribed velocity
                         if (i == Ny && j < Nx) {
-                            Trip.push_back(Trp(kx, kx, 1));
-                            Trip.push_back(Trp(kx, kx - 6, 1));
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx - 6, 1)});
                             R(kx) = 2 * bclower;
                         }
                         
-                        // Left boundary:
+                        // Left boundary
                         if (j == 0 && i > 0 && i < Ny) {
-                            Trip.push_back(Trp(kx, kx, 1));
-                            Trip.push_back(Trp(kx, kx + 6 * Ny1, -1));
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx + 6 * Ny1, -1)});
                             R(kx) = 0;
                         }
                         
                         // Right boundary
                         if (j == Nx - 1 && i > 0 && i < Ny) {
-                            Trip.push_back(Trp(kx, kx, 1));
-                            Trip.push_back(Trp(kx, kx - 6 * Ny1, -1));
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx - 6 * Ny1, -1)});
                             R(kx) = 0;
                         }
                         
@@ -1154,19 +975,13 @@ int main() {
                         double dRHOdy = (RHO(i, j) - RHO(i - 1, j)) / dy;
                         // Left part
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        Trip.push_back(Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt)); //vxs3
-                        Trip.push_back(Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2)); //vxs1
-                        Trip.push_back(Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2)); //vxs5
-                        Trip.push_back(Trp(kx, kx - 6, ETAXY1 / dy2)); //vxs2
-                        Trip.push_back(Trp(kx, kx + 6, ETAXY2 / dy2)); //vxs4
                         double gx_dt_dRHOdy = gx * dt * dRHOdy / 4.;
                         double dx_dy = dx * dy;
-                        Trip.push_back(Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys1
-                        Trip.push_back(Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - gx_dt_dRHOdy)); //vys2
-                        Trip.push_back(Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys3
-                        Trip.push_back(Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - gx_dt_dRHOdy)); //vys4
-                        Trip.push_back(Trp(kx, kp, ptscale / dx)); //Pt1'
-                        Trip.push_back(Trp(kx, kp + Ny1 * 6, -ptscale / dx)); //Pt2'
+                        Trip.insert(Trip.end(), {Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt), Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2), 
+                                        Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2), Trp(kx, kx - 6, ETAXY1 / dy2), Trp(kx, kx + 6, ETAXY2 / dy2), /* vxs3, vxs1, vxs5, vxs2, vxs4 */
+                                        Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - gx_dt_dRHOdy), Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - gx_dt_dRHOdy),
+                                        Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - gx_dt_dRHOdy), Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - gx_dt_dRHOdy), /* vys1, vys2, vys3, vys4 */
+                                        Trp(kx, kp, ptscale / dx), Trp(kx, kp + Ny1 * 6, -ptscale / dx)}); /* Pt1', Pt2' */
                         // Right part
                         R(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
@@ -1182,16 +997,14 @@ int main() {
                         // Left boundary
                         // Free Slip
                         if (j == 0) {
-                            Trip.push_back(Trp(ky, ky, 1));
-                            Trip.push_back(Trp(ky, ky + Ny1 * 6, 1));
+                            Trip.insert(Trip.end(), {Trp(ky, ky, 1), Trp(ky, ky + Ny1 * 6, 1)});
                             R(ky) = 0;
                         }
                         
                         // Right boundary
                         // Free Slip
                         if (j == Nx) {
-                            Trip.push_back(Trp(ky, ky, 1));
-                            Trip.push_back(Trp(ky, ky - Ny1 * 6, 1));
+                            Trip.insert(Trip.end(), {Trp(ky, ky, 1), Trp(ky, ky - Ny1 * 6, 1)});
                             R(ky) = 0;
                         }
                         
@@ -1250,19 +1063,13 @@ int main() {
                         double dRHOdx = (RHO(i, j) - RHO(i, j - 1)) / dx;
                         // Left part
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        Trip.push_back(Trp(ky, ky, - (ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt));	//vys3
-                        Trip.push_back(Trp(ky, ky  - Ny1 * 6, ETAXY1 / dx2)); //vys1
-                        Trip.push_back(Trp(ky, ky  + Ny1 * 6, ETAXY2 / dx2)); //vys5
-                        Trip.push_back(Trp(ky, ky  - 6, ETAYY1 / dy2)); //vys2
-                        Trip.push_back(Trp(ky, ky  + 6, ETAYY2 / dy2)); //vys4
                         double gy_dt_dRHOdx = gy * dt * dRHOdx / 4.;
                         double dx_dy = dx * dy;
-                        Trip.push_back(Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs1
-                        Trip.push_back(Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs2
-                        Trip.push_back(Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - gy_dt_dRHOdx)); //vxs3
-                        Trip.push_back(Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - gy_dt_dRHOdx)); //vxs4
-                        Trip.push_back(Trp(ky, kp, ptscale / dy)); //Pt1'
-                        Trip.push_back(Trp(ky, kp + 6, -ptscale / dy));	//Pt2'
+                        Trip.insert(Trip.end(), {Trp(ky, ky, -(ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt), Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2),
+                                        Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2), Trp(ky, ky - 6, ETAYY1 / dy2), Trp(ky, ky + 6, ETAYY2 / dy2), /* vys3, vys1, vys5, vys2, vys4 */
+                                        Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - gy_dt_dRHOdx), Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - gy_dt_dRHOdx),
+                                        Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - gy_dt_dRHOdx), Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - gy_dt_dRHOdx), /* vxs1, vxs2, vxs3, vxs4 */
+                                        Trp(ky, kp, ptscale / dy), Trp(ky, kp + 6, -ptscale / dy)}); /* Pt1', Pt2' */
                         // Right part
                         R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
@@ -1284,12 +1091,8 @@ int main() {
                         // Biott - Willis koefficient
                         double KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
-                        Trip.push_back(Trp(kp, kx - Ny1 * 6, -1. / dx)); //vxs1
-                        Trip.push_back(Trp(kp, kx, 1. / dx)); //vxs2
-                        Trip.push_back(Trp(kp, ky - 6, -1. / dy)); //vys1
-                        Trip.push_back(Trp(kp, ky, 1. / dy)); //vys2
-                        Trip.push_back(Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt))); //Pt
-                        Trip.push_back(Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))); //Pf
+                        Trip.insert(Trip.end(), {Trp(kp, kx - Ny1 * 6, -1. / dx), Trp(kp, kx, 1. / dx), /* vxs1, vxs2 */ Trp(kp, ky - 6, -1. / dy), Trp(kp, ky, 1. / dy), /* vys1, vys2 */
+                                        Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt)), Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))}); /* Pt, Pf */
                         // Right part
                         R(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
                     }
@@ -1304,15 +1107,13 @@ int main() {
                         
                         // Upper boundary: symmetry
                         if (i == 0 && j < Nx) {
-                            Trip.push_back(Trp(kxf, kxf, 1));
-                            Trip.push_back(Trp(kxf, kxf + 6, -1));
+                            Trip.insert(Trip.end(), {Trp(kxf, kxf, 1), Trp(kxf, kxf + 6, -1)});
                             R(kxf) = 0;
                         }
                         
                         // Lower boundary: symmetry
                         if (i == Ny && j < Nx) {
-                            Trip.push_back(Trp(kxf, kxf, 1));
-                            Trip.push_back(Trp(kxf, kxf - 6, -1));
+                            Trip.insert(Trip.end(), {Trp(kxf, kxf, 1), Trp(kxf, kxf - 6, -1)});
                             R(kxf) = 0;
                         }
                         
@@ -1331,15 +1132,13 @@ int main() {
                         }
                         
                     } else {
-                        // Fluid X - Darsi:  - ETAfluid / K * VxD - dPf / dx = -RHOf * gx + RHOf * DVxs / Dt
+                        // Fluid X - Darsi: - ETAfluid / K * VxD - dPf / dx = -RHOf * gx + RHOf * DVxs / Dt
                         //
                         //  Pf1 --- vxD, vxs --- Pf2
                         //
                         // Left part
-                        Trip.push_back(Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * ascale / dt)); //vxD
-                        Trip.push_back(Trp(kxf, kx, -RHOFX(i, j) * ascale / dt)); //vxs
-                        Trip.push_back(Trp(kxf, kpf, pfscale / dx)); //Pf1'
-                        Trip.push_back(Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)); //Pf2'
+                        Trip.insert(Trip.end(), {Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * ascale / dt), Trp(kxf, kx, -RHOFX(i, j) * ascale / dt), /* vxD, vxs */
+                                        Trp(kxf, kpf, pfscale / dx), Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)}); /* Pf1', Pf2' */
                         // Right part
                         R(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
                     }
@@ -1355,16 +1154,14 @@ int main() {
                         // Left boundary
                         // symmetry
                         if (j == 0 && i > 0 && i < Ny - 1) {
-                            Trip.push_back(Trp(kyf, kyf, 1));
-                            Trip.push_back(Trp(kyf, kyf + Ny1 * 6, -1));
+                            Trip.insert(Trip.end(), {Trp(kyf, kyf, 1), Trp(kyf, kyf + Ny1 * 6, -1)});
                             R(kyf) = 0;
                         }
                         
                         // Right boundary
                         // symmetry
                         if (j == Nx && i > 0 && i < Ny - 1) {
-                            Trip.push_back(Trp(kyf, kyf, 1));
-                            Trip.push_back(Trp(kyf, kyf - Ny1 * 6, -1));
+                            Trip.insert(Trip.end(), {Trp(kyf, kyf, 1), Trp(kyf, kyf - Ny1 * 6, -1)});
                             R(kyf) = 0;
                         }
                         
@@ -1380,7 +1177,7 @@ int main() {
                             R(kyf) = bcvyflower;
                         }
                     } else {
-                        // Fluid Y - Darsi:  - ETAfluid / K * VyD - dPf / dy = -RHOf * gy + RHOf * DVys / Dt
+                        // Fluid Y - Darsi: - ETAfluid / K * VyD - dPf / dy = -RHOf * gy + RHOf * DVys / Dt
                         //
                         //   Pf1
                         //    |
@@ -1389,10 +1186,8 @@ int main() {
                         //   Pf2
                         //
                         // Left part
-                        Trip.push_back(Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * ascale / dt)); //vyD
-                        Trip.push_back(Trp(kyf, ky, -RHOFY(i, j) * ascale / dt)); //vys
-                        Trip.push_back(Trp(kyf, kpf, pfscale / dy)); //Pf1'
-                        Trip.push_back(Trp(kyf, kpf + 6, -pfscale / dy)); //Pf2'
+                        Trip.insert(Trip.end(), {Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * ascale / dt), Trp(kyf, ky, -RHOFY(i, j) * ascale / dt), /* vyD, vys */
+                                        Trp(kyf, kpf, pfscale / dy), Trp(kyf, kpf + 6, -pfscale / dy)}); /* Pf1', Pf2' */
                         // Right part
                         R(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
                     }
@@ -1402,8 +1197,7 @@ int main() {
                         // BC equation: 1 * Pf = 0
                         // Real BC
                         if (i == 1 || i == Ny - 1) {
-                            Trip.push_back(Trp(kpf, kpf, pfscale));
-                            Trip.push_back(Trp(kpf, kp, -ptscale));
+                            Trip.insert(Trip.end(), {Trp(kpf, kpf, pfscale), Trp(kpf, kp, -ptscale)});
                             R(kpf) = -PTFDIFF;
                         } else {
                             Trip.push_back(Trp(kpf, kpf, 1));
@@ -1424,17 +1218,15 @@ int main() {
                         // Skempton koefficient
                         KSK = (BETADRAINED - BETASOLID) / (BETADRAINED - BETASOLID + POR(i, j) * (BETAFLUID - BETASOLID));
                         // Left part
-                        Trip.push_back(Trp(kpf, kxf - Ny1 * 6, -1. / dx)); //vxs1
-                        Trip.push_back(Trp(kpf, kxf, 1. / dx)); //vxs2
-                        Trip.push_back(Trp(kpf, kyf - 6, -1. / dy)); //vys1
-                        Trip.push_back(Trp(kpf, kyf, 1. / dy)); //vys2
-                        Trip.push_back(Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))); //Pt
-                        Trip.push_back(Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))); //Pf
+                        Trip.insert(Trip.end(), {Trp(kpf, kxf - Ny1 * 6, -1. / dx), Trp(kpf, kxf, 1. / dx), /* vxs1, vxs2 */ Trp(kpf, kyf - 6, -1. / dy), Trp(kpf, kyf, 1. / dy), /* vys1, vys2 */
+                                        Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt)), Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))}); /* Pt, Pf */
                         // Right part
                         R(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1. / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
                 }
             }
+
+            auto start = hrc::now();
 
             SparseMatrix<double> L(N, N); // Matrix of coefficients in the left part
             L.setFromTriplets(Trip.begin(), Trip.end()); // Build Sparse Matrix
@@ -1444,18 +1236,21 @@ int main() {
             solver.factorize(L);
             S = solver.solve(R);
 
+            auto stop = hrc::now();
+            cout << chrono::duration_cast<microseconds>(stop - start).count() << endl;
+
             // 7) Reload solution
             // pfavr = 0;
             // pcount = 0;
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Global indexes for vx, vy, P
-                    kp = (j * Ny1 + i) * 6;
-                    kx = kp + 1;
-                    ky = kp + 2;
-                    kpf = kp + 3;
-                    kxf = kp + 4;
-                    kyf = kp + 5;
+                    int kp = (j * Ny1 + i) * 6;
+                    int kx = kp + 1;
+                    int ky = kp + 2;
+                    int kpf = kp + 3;
+                    int kxf = kp + 4;
+                    int kyf = kp + 5;
                     // Reload solution
                     pt(i, j) = S(kp) * ptscale;
                     vxs(i, j) = S(kx);
@@ -2017,7 +1812,7 @@ int main() {
         int t_1 = timestep - 1;
         
         // Update timesum
-        timesum = timesum + dt;
+        timesum += dt;
         timesumcur(t_1) = timesum;
         dtcur(t_1) = dt;
         
@@ -2160,23 +1955,22 @@ int main() {
             string save_file_name = nname + to_string(timestep) + ".h5";
             string group_matrix_small = "Matrix_small";
             string group_matrix_large = "Matrix_large";
-            string group_vector = "Vector";
+            string group_vector_long = "Vector_long";
+            string group_vector_short = "Vector_short";
             string group_values = "Value";
 
-
             create_file(save_file_name);
-            add_group(save_file_name, group_matrix_small);
-            add_group(save_file_name, group_matrix_large);
-            add_group(save_file_name, group_vector);
-            add_group(save_file_name, group_values);
+            for (auto i : {group_matrix_small, group_matrix_large, group_vector_long, group_vector_short, group_values}){
+                add_group(save_file_name, i);
+            }
 
             // save matrices and vectors to restart the simulation from a certain timestep.
             // !!! Always change both the string array and loop order !!!
             hsize_t dims1[2] = {Ny, Nx};
-            string matrix_names_nxny[29] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA50", "ETA00",
+            string matrix_names_nxny[28] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00",
                                             "IETAPLB", "SXY", "SXY0", "YNY0", "YNY00", "KKK", "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "STRPLB", "VSLIPB"}; // {"names"} has to be the same as in *matrix_nxny
             int j = 0;
-            for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA50, ETA00,
+            for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00,
                            IETAPLB, SXY, SXY0, YNY0, YNY00, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB, VSLIPB}) { // {names} *matrix_nxny
                 add_matrix(save_file_name, group_matrix_small, i, matrix_names_nxny[j], dims1);
                 j++;
@@ -2196,13 +1990,21 @@ int main() {
             string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
             j = 0;
             for (auto i : {timesumcur, dtcur, maxvxsmod, minvxsmod, maxvysmod, minvysmod}) { // {names} *vec
-                add_vector(save_file_name, group_vector, i, vector_names[j], dim1);
+                add_vector(save_file_name, group_vector_long, i, vector_names[j], dim1);
                 j++;
             }
 
-            VecXd temp(1);
-            temp << timesum;
-            hsize_t dim2[1] = {1};
+            hsize_t dim3[1] = {marknum};
+            string vector_names_marker[14] = {"t_marker", "rhom", "etasm", "gsm", "cohescm", "cohestm", "frictcm", "dilatcm", "fricttm", "kkkm", "rhofm", "etafm", "xm", "ym"}; // {"names"} has to be the same as in *vec2
+            j = 0;
+            for (auto i : {t_marker, rhom, etasm, gsm, cohescm, cohestm, frictcm, dilatcm, fricttm, kkkm, rhofm, etafm, xm, ym}) { // {names} *vec2
+                add_vector(save_file_name, group_vector_short, i, vector_names_marker[j], dim3);
+                j++;
+            }
+
+            VecXd temp(13);
+            temp << timesum, dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy;
+            hsize_t dim2[1] = {13};
             add_vector(save_file_name, group_values, temp, "values", dim2);
         }
     }
