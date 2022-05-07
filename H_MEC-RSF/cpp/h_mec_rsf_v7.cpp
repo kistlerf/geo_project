@@ -257,46 +257,48 @@ int main() {
 
     if (timestep > 0) {
         string filename = nname + to_string(timestep) + ".h5";
-        string group_matrix_small = "Matrix_small";
-        string group_matrix_large = "Matrix_large";
-        string group_vector_long = "Vector_long";
-        string group_vector_short = "Vector_short";
+        string group_matrix = "Matrix";
+        string group_vector = "Vector";
         string group_values = "Value";
 
         // read dummy matrix for testing
         hsize_t dims1[2] = {Ny, Nx};
-        string matrix_names_nxny[28] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00",
-                                        "IETAPLB", "SXY", "SXY0", "YNY0", "YNY00", "KKK", "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "STRPLB", "VSLIPB"}; // {"names"} has to be the same as in *matrix_nxny
+        string matrix_names_nxny[36] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY", "SXY0", "YNY0", "YNY00", "KKK",
+                                        "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "STRPLB", "VSLIPB", "AXY", "DSY", "YNY", "SigmaY", "SII_fault", "ETA",
+                                        "ESP", "EXY"}; // {"names"} has to be the same as in *matrix_nxny
         int j = 0;
-        for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00,
-                       IETAPLB, SXY, SXY0, YNY0, YNY00, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB, VSLIPB}) { // {names} *matrix_nxny
-            i = read_matrix(filename, group_matrix_small, matrix_names_nxny[j], dims1);
+        for (auto i : {&SIIB, &OM0, &OM, &OM5, &ARSF, &BRSF, &LRSF, &RHO, &ETA0, &ETA1, &ETA5, &ETA00, &IETAPLB, &SXY, &SXY0, &YNY0, &YNY00, &KKK, &GGG, &COHC, &COHT, &FRIC, &FRIT,
+                       &DILC, &TTT, &EIIB, &STRPLB, &VSLIPB, &AXY, &DSY, &YNY, &SigmaY, &SII_fault, &ETA, &ESP, &EXY}) { // {names} *matrix_nxny
+            *i = read_matrix(filename, group_matrix, matrix_names_nxny[j], dims1);
             j++;
         }
 
         hsize_t dims2[2] = {Ny1, Nx1};
-        string matrix_names_nx1ny1[37] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0", "pt_ave", "pf_ave",
-                                          "SXX", "SXX0", "SYY", "SYY0", "DILP", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_ny1nx1
+        string matrix_names_nx1ny1[46] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0", "pt_ave",
+                                          "pf_ave", "SXX", "SXX0", "SYY", "SYY0", "DILP", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0",
+                                          "EXX", "EYY", "EII", "EIIVP", "SII", "DSII", "DIS", "EL_DECOM", "VIS_COMP"}; // {"names"} has to be the same as in *matrix_ny1nx1
         j = 0;
-        for (auto i : {pt, vxs, vys, pf, vxD, vyD, DVX0, DVY0, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, pt_ave, pf_ave,
-                       SXX, SXX0, SYY, SYY0, DILP, RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0}) { // {names} *matrix_nx1ny1
-            i = read_matrix(filename, group_matrix_large, matrix_names_nx1ny1[j], dims2);
+        for (auto i : {&pt, &vxs, &vys, &pf, &vxD, &vyD, &DVX0, &DVY0, &ETAB, &ETAB0, &ETAP, &ETAP0, &POR, &GGGP, &GGGB, &PTF0, &PT0, &PF0, &pt_ave, &pf_ave, &SXX, &SXX0, &SYY, &SYY0,
+                       &DILP, &RHOX, &RHOFX, &ETADX, &PORX, &VX0, &VXF0, &RHOY, &RHOFY, &ETADY, &PORY, &VY0, &VYF0, &EXX, &EYY, &EII, &EIIVP, &SII, &DSII, &DIS, &EL_DECOM, &VIS_COMP}) { // {names} *matrix_nx1ny1
+            *i = read_matrix(filename, group_matrix, matrix_names_nx1ny1[j], dims2);
             j++;
         }
         
         hsize_t dim1[1] = {num_timesteps};
         string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
         j = 0;
-        for (auto i : {timesumcur, dtcur, maxvxsmod, minvxsmod, maxvysmod, minvysmod}) { // {names} *vec
-            i = read_vector(filename, group_vector_long, vector_names[j], dim1);
+        for (auto i : {&timesumcur, &dtcur, &maxvxsmod, &minvxsmod, &maxvysmod, &minvysmod}) { // {names} *vec
+            *i = read_vector(filename, group_vector, vector_names[j], dim1);
             j++;
         }
 
         hsize_t dim3[1] = {marknum};
-        string vector_names_marker[14] = {"t_marker", "rhom", "etasm", "gsm", "cohescm", "cohestm", "frictcm", "dilatcm", "fricttm", "kkkm", "rhofm", "etafm", "xm", "ym"}; // {"names"} has to be the same as in *vec2
+        string vector_names_marker[24] = {"t_marker", "rhom", "etasm", "gsm", "cohescm", "cohestm", "frictcm", "dilatcm", "fricttm", "kkkm", "rhofm", "etafm", "xm", "ym", "etam", "etabm",
+                                          "porm", "sxxm", "syym", "sxym", "vx0m", "vy0m", "ptfm", "amursfm"}; // {"names"} has to be the same as in *vec2
         j = 0;
-        for (auto i : {t_marker, rhom, etasm, gsm, cohescm, cohestm, frictcm, dilatcm, fricttm, kkkm, rhofm, etafm, xm, ym}) { // {names} *vec2
-            i = read_vector(filename, group_vector_short, vector_names_marker[j], dim3);
+        for (auto i : {&t_marker, &rhom, &etasm, &gsm, &cohescm, &cohestm, &frictcm, &dilatcm, &fricttm, &kkkm, &rhofm, &etafm, &xm, &ym, &etam, &etabm, &porm, &sxxm, &syym, &sxym, &vx0m,
+                       &vy0m, &ptfm, &amursfm}) { // {names} *vec2
+            *i = read_vector(filename, group_vector, vector_names_marker[j], dim3);
             j++;
         }
 
@@ -304,6 +306,9 @@ int main() {
         VecXd temp = read_vector(filename, group_values, "values", dim2);
         timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); KXX = temp(4); KXY = temp(5); KSK = temp(6);
         BETADRAINED = temp(7); dtlapusta = temp(8); pfscale = temp(9); ptscale = temp(10); Vmax = temp(11); maxvxy = temp(12); dt = temp(13), yndtdecrease = temp(14);
+
+        hsize_t dim4[1] = {N};
+        R = read_vector(filename, group_vector, "R", dim4);
 
         timestep++;
     } else {
@@ -1793,7 +1798,7 @@ int main() {
         
         // ========== save time, dt, vmax
         ofstream out_data("EVO_data.txt", ios_base::app | ios_base::out);
-        out_data << setw(20) << timesum << setw(20) << dt << setw(20) << Vmax << setw(20) << ynlast << setw(20) << iterstep << endl;
+        out_data << setw(20) << timesum << setw(20) << dt << setw(20) << Vmax << setw(20) << ynlast + 1 << setw(20) << iterstep + 1 << endl;
         out_data.close();
         
         if (timestep % savestep == 0) {
@@ -1803,36 +1808,36 @@ int main() {
             out_file.close();
 
             string save_file_name = nname + to_string(timestep) + ".h5";
-            string group_matrix_small = "Matrix_small";
-            string group_matrix_large = "Matrix_large";
-            string group_vector_long = "Vector_long";
-            string group_vector_short = "Vector_short";
+            string group_matrix = "Matrix";
+            string group_vector = "Vector";
             string group_values = "Value";
 
             create_file(save_file_name);
-            for (auto i : {group_matrix_small, group_matrix_large, group_vector_long, group_vector_short, group_values}){
+            for (auto i : {group_matrix,  group_vector, group_values}){
                 add_group(save_file_name, i);
             }
 
             // save matrices and vectors to restart the simulation from a certain timestep.
             // !!! Always change both the string array and loop order !!!
             hsize_t dims1[2] = {Ny, Nx};
-            string matrix_names_nxny[28] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00",
-                                            "IETAPLB", "SXY", "SXY0", "YNY0", "YNY00", "KKK", "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "STRPLB", "VSLIPB"}; // {"names"} has to be the same as in *matrix_nxny
+            string matrix_names_nxny[36] = {"SIIB", "OM0", "OM", "OM5", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY", "SXY0", "YNY0", "YNY00", "KKK",
+                                            "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "STRPLB", "VSLIPB", "AXY", "DSY", "YNY", "SigmaY", "SII_fault", "ETA",
+                                            "ESP", "EXY"}; // {"names"} has to be the same as in *matrix_nxny
             int j = 0;
-            for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00,
-                           IETAPLB, SXY, SXY0, YNY0, YNY00, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB, VSLIPB}) { // {names} *matrix_nxny
-                add_matrix(save_file_name, group_matrix_small, i, matrix_names_nxny[j], dims1);
+            for (auto i : {SIIB, OM0, OM, OM5, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00, IETAPLB, SXY, SXY0, YNY0, YNY00, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, STRPLB,
+                           VSLIPB, AXY, DSY, YNY, SigmaY, SII_fault, ETA, ESP, EXY}) { // {names} *matrix_nxny
+                add_matrix(save_file_name, group_matrix, i, matrix_names_nxny[j], dims1);
                 j++;
             }
 
             hsize_t dims2[2] = {Ny1, Nx1};
-            string matrix_names_nx1ny1[37] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0", "pt_ave", "pf_ave",
-                                              "SXX", "SXX0", "SYY", "SYY0", "DILP", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_ny1nx1
+            string matrix_names_nx1ny1[46] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0", "pt_ave",
+                                              "pf_ave", "SXX", "SXX0", "SYY", "SYY0", "DILP", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0",
+                                              "EXX", "EYY", "EII", "EIIVP", "SII", "DSII", "DIS", "EL_DECOM", "VIS_COMP"}; // {"names"} has to be the same as in *matrix_ny1nx1
             j = 0;
-            for (auto i : {pt, vxs, vys, pf, vxD, vyD, DVX0, DVY0, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, pt_ave, pf_ave,
-                           SXX, SXX0, SYY, SYY0, DILP, RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0}) { // {names} *matrix_nx1ny1
-                add_matrix(save_file_name, group_matrix_large, i, matrix_names_nx1ny1[j], dims2);
+            for (auto i : {pt, vxs, vys, pf, vxD, vyD, DVX0, DVY0, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, pt_ave, pf_ave, SXX, SXX0, SYY, SYY0, DILP, RHOX, RHOFX, ETADX,
+                           PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, EXX, EYY, EII, EIIVP, SII, DSII, DIS, EL_DECOM, VIS_COMP}) { // {names} *matrix_nx1ny1
+                add_matrix(save_file_name, group_matrix, i, matrix_names_nx1ny1[j], dims2);
                 j++;
             }
             
@@ -1840,15 +1845,16 @@ int main() {
             string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
             j = 0;
             for (auto i : {timesumcur, dtcur, maxvxsmod, minvxsmod, maxvysmod, minvysmod}) { // {names} *vec
-                add_vector(save_file_name, group_vector_long, i, vector_names[j], dim1);
+                add_vector(save_file_name, group_vector, i, vector_names[j], dim1);
                 j++;
             }
 
             hsize_t dim3[1] = {marknum};
-            string vector_names_marker[14] = {"t_marker", "rhom", "etasm", "gsm", "cohescm", "cohestm", "frictcm", "dilatcm", "fricttm", "kkkm", "rhofm", "etafm", "xm", "ym"}; // {"names"} has to be the same as in *vec2
+            string vector_names_marker[24] = {"t_marker", "rhom", "etasm", "gsm", "cohescm", "cohestm", "frictcm", "dilatcm", "fricttm", "kkkm", "rhofm", "etafm", "xm", "ym", "etam", "etabm",
+                                              "porm", "sxxm", "syym", "sxym", "vx0m", "vy0m", "ptfm", "amursfm"}; // {"names"} has to be the same as in *vec2
             j = 0;
-            for (auto i : {t_marker, rhom, etasm, gsm, cohescm, cohestm, frictcm, dilatcm, fricttm, kkkm, rhofm, etafm, xm, ym}) { // {names} *vec2
-                add_vector(save_file_name, group_vector_short, i, vector_names_marker[j], dim3);
+            for (auto i : {t_marker, rhom, etasm, gsm, cohescm, cohestm, frictcm, dilatcm, fricttm, kkkm, rhofm, etafm, xm, ym, etam, etabm, porm, sxxm, syym, sxym, vx0m, vy0m, ptfm, amursfm}) { // {names} *vec2
+                add_vector(save_file_name, group_vector, i, vector_names_marker[j], dim3);
                 j++;
             }
 
@@ -1856,6 +1862,9 @@ int main() {
             temp << timesum, dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy, dt, yndtdecrease;
             hsize_t dim2[1] = {15};
             add_vector(save_file_name, group_values, temp, "values", dim2);
+
+            hsize_t dim4[1] = {N};
+            add_vector(save_file_name, group_vector, R, "R", dim4);
         }
     }
     return 0;
