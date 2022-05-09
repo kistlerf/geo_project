@@ -1,7 +1,7 @@
 #!/bin/sh
 
 CPU_TYPE="XeonGold_6150"
-MAIN_FILE="h_mec_rsf_v7.cpp"
+MAIN_FILE="h_mec_rsf_v8.cpp"
 LINK_FILES="hdf5.cpp"
 declare -i NUM_THREADS=4
 declare -i START_TIMESTEP=0
