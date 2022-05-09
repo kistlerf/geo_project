@@ -6,9 +6,6 @@ using namespace std;
 using namespace Eigen;
 using namespace H5;
 
-typedef VectorXd VecXd;
-typedef MatrixXd MatXd;
-
 /*
 inputs:
     string filename
@@ -40,7 +37,7 @@ inputs:
     string dataset_name -> name the stored data
     hsize_t* dims -> 2 dimensional array with dimensions (x and y) of stored data
 */
-void add_matrix(const string &filename, const string &groupname, const MatXd& data, const string &dataset_name, hsize_t* dims) {
+void add_matrix(const string &filename, const string &groupname, const MatrixXd& data, const string &dataset_name, hsize_t* dims) {
     H5File *file = new H5File(filename, H5F_ACC_RDWR);
     Group *group = new Group(file->openGroup(groupname));
     DataSpace *dataspace = new DataSpace(2, dims);
@@ -69,7 +66,7 @@ inputs:
     string dataset_name -> name the stored data
     hsize_t* dims -> 1 dimensional array with dimension (x) of stored data
 */
-void add_vector(const string &filename, const string &groupname, const VecXd& data, const string &dataset_name, hsize_t* dims) {
+void add_vector(const string &filename, const string &groupname, const VectorXd& data, const string &dataset_name, hsize_t* dims) {
     H5File *file = new H5File(filename, H5F_ACC_RDWR);
     Group *group = new Group(file->openGroup(groupname));
     DataSpace *dataspace = new DataSpace(1, dims);
@@ -97,8 +94,8 @@ inputs:
 output:
     MatrixXd data_out -> data saved in "dataset_name"
 */
-MatXd read_matrix(const string &filename, const string &groupname, const string &dataset_name, hsize_t* dims) {
-    MatXd data_out(dims[0], dims[1]);
+MatrixXd read_matrix(const string &filename, const string &groupname, const string &dataset_name, hsize_t* dims) {
+    MatrixXd data_out(dims[0], dims[1]);
     double out[dims[0]][dims[1]];
     
     H5File *file = new H5File(filename, H5F_ACC_RDONLY);
@@ -130,8 +127,8 @@ inputs:
 output:
     VectorXd data_out -> data saved in "dataset_name"
 */
-VecXd read_vector(const string &filename, const string &groupname, const string &dataset_name, hsize_t* dims) {
-    VecXd data_out(dims[0]);
+VectorXd read_vector(const string &filename, const string &groupname, const string &dataset_name, hsize_t* dims) {
+    VectorXd data_out(dims[0]);
     double out[dims[0]];
     
     H5File *file = new H5File(filename, H5F_ACC_RDONLY);
