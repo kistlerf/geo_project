@@ -11,7 +11,10 @@ typedef VectorXd VecXd;
 typedef MatrixXd MatXd;
 
 // set timestep limit
-const int num_timesteps = 100; // very small number for testing
+const int num_timesteps = 200; // very small number for testing
+
+// Timesteps between visualization frames
+const int savestep = 20;  // storage periodicity
 
 // ========================================
 // Define Numerical model
@@ -65,9 +68,6 @@ const double dtelastic0 = 5e8; // elastic timestep
 const double dtmin = 1e-4;
 
 const double ascale = 1.;
-
-// Timesteps between visualization frames
-const int savestep = 10;  // storage periodicity
 
 const double lower_block = ysize / 2. + dy;
 const double upper_block = ysize / 2. - dy;
@@ -145,5 +145,9 @@ const double plstrain = 0; // Plastic strain for dilatancy
 const double aa1 = 20.93, aa2 = 35.28, aa3 = 2.34;
 const double bb1 = 0.99, bb2 = 44.39, bb3 = 0.73;
 const double cc1 = 0.37, cc2 = 3.54, cc3 = 0.47;
+
+const VecXd gm = VecXd::Constant(marknum, shearmod); // Standard shear modulus of bulk, Pa
+const VecXd rhofm = VecXd::Constant(marknum, 1000); // Density of fluid
+const VecXd etafm = VecXd::Constant(marknum, 1e-3); // Viscosity of fluid
 
 #endif
