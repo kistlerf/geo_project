@@ -73,7 +73,7 @@ MatXd vyD(Ny1, Nx1); // Darsi vy - velocity
 // Nodal matrices
 // Basic nodes
 MatXd RHO(Ny, Nx), ETA(Ny, Nx), ETA0(Ny, Nx), ETA1(Ny, Nx), ETA5(Ny, Nx), ETA00(Ny, Nx), IETAPLB(Ny, Nx), SXY(Ny, Nx), SXY0(Ny, Nx), YNY0(Ny, Nx), KKK(Ny, Nx),
-      GGG(Ny, Nx), COHC(Ny, Nx), COHT(Ny, Nx), FRIC(Ny, Nx), FRIT(Ny, Nx), DILC(Ny, Nx), TTT(Ny, Nx), EIIB(Ny, Nx);
+      GGG(Ny, Nx), COHC(Ny, Nx), COHT(Ny, Nx), FRIC(Ny, Nx), FRIT(Ny, Nx), DILC(Ny, Nx), TTT(Ny, Nx), EIIB(Ny, Nx), VSLIPB(Ny, Nx);
 
 // Pressure nodes
 MatXd ETAB(Ny1, Nx1), ETAB0(Ny1, Nx1), ETAP(Ny1, Nx1), ETAP0(Ny1, Nx1), POR(Ny1, Nx1), GGGP(Ny1, Nx1), GGGB(Ny1, Nx1), PTF0(Ny1, Nx1), PT0(Ny1, Nx1), PF0(Ny1, Nx1), pt_ave(Ny1, Nx1),
@@ -83,25 +83,6 @@ MatXd RHOX(Ny1, Nx1), RHOFX(Ny1, Nx1), ETADX(Ny1, Nx1), PORX(Ny1, Nx1), VX0(Ny1,
 // Vy nodes
 MatXd RHOY(Ny1, Nx1), RHOFY(Ny1, Nx1), ETADY(Ny1, Nx1), PORY(Ny1, Nx1), VY0(Ny1, Nx1), VYF0(Ny1, Nx1);
 
-MatXd VSLIPB(Ny, Nx);
-
-// Lagrangian solid markers
-VecXd rhom(marknum);     // Density of solid
-VecXd etasm(marknum);    // Standard shear viscosity of bulk
-VecXd etam(marknum);     // Shear viscosity of bulk
-VecXd cohescm(marknum);  // Cohesion for confined fracture of solid
-VecXd frictcm(marknum);  // friction for confined fracture of solid
-VecXd dilatcm(marknum);  // dilatation for confined fracture of solid
-VecXd cohestm(marknum);  // Cohesion for tensile fracture of solid
-VecXd fricttm(marknum);  // friction for tensile fracture of solid
-VecXd porm(marknum);     // Porosity of solid
-VecXd kkkm(marknum);     // Standard permeability of solid
-VecXd t_marker(marknum); // Marker rock type
-VecXd xm(marknum);       // Horizontal coordinates of solid markers
-VecXd ym(marknum);       // Vertical coordinates of solid markers
-VecXd sxxm(marknum);     // Marker SIGMAxx', Pa
-VecXd syym(marknum);     // Marker SIGMAyy', Pa
-VecXd sxym(marknum);     // Marker SIGMAxy', Pa
 
 MatXd ESP(Ny, Nx), EXY(Ny, Nx), EXX(Ny1, Nx1), EYY(Ny1, Nx1), EII(Ny1, Nx1), EIIVP(Ny1, Nx1), SII(Ny1, Nx1), DSII(Ny1, Nx1), DIS(Ny1, Nx1);
 
@@ -126,12 +107,9 @@ double dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, 
 
 VecXd DSYLSQ(niterglobal);
 
-MatXd DVX0(Ny1, Nx1), DVY0(Ny1, Nx1);
+MatXd DVX0(Ny1, Nx1), DVY0(Ny1, Nx1), DSY(Ny, Nx), YNY(Ny, Nx), SigmaY(Ny, Nx), SII_fault(Ny, Nx), SIIB(Ny, Nx);
 
-MatXd DSY(Ny, Nx), YNY(Ny, Nx), SigmaY(Ny, Nx), SII_fault(Ny, Nx), SIIB(Ny, Nx);
-
-VecXd timesumcur(num_timesteps);
-VecXd dtcur(num_timesteps);
+VecXd timesumcur(num_timesteps), dtcur(num_timesteps);
 VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timesteps), minvysmod(num_timesteps);
 
 // ====================================================================================
@@ -151,6 +129,11 @@ auto enforce_bounds = [](double val, double min, double max) {
         val = max;
     }
     return val;
+};
+
+// lambda function that squares each element of a 2x2 block
+auto square_block = [](Matrix2d mat) {
+    return (pow(mat(0, 0), 2) + pow(mat(0, 1), 2) + pow(mat(1, 0), 2) + pow(mat(1, 1), 2));
 };
 
 // function that checks if a integer value is bigger than 0 and lower than a set bound
@@ -180,7 +163,7 @@ int main() {
     // srand(time(nullptr));
     // ====================================================================================
 
-    double runtime = 0, output_time = 0;
+    double runtime = 0, output_time = 0, parallel_tot = 0;
 
     // read input
     // Load file
@@ -190,35 +173,26 @@ int main() {
     int timestep = stoi(timestep_str);
     input_timestep.close();
 
-    // Preassure nodes
-    t_marker = VecXd::Constant(marknum, 1);
-    rhom = VecXd::Constant(marknum, 2800);
-    etasm = VecXd::Constant(marknum, 1e21);
-    cohescm = VecXd::Constant(marknum, cohes);
-    cohestm = VecXd::Constant(marknum, cohes);
-    frictcm = VecXd::Constant(marknum, .5);
-    dilatcm = VecXd::Constant(marknum, dilatation);
-    fricttm = VecXd::Constant(marknum, tensile);
-    kkkm = VecXd::Constant(marknum, 2e-16); // * (dy / faultwidth)^2;
-
     for (int m = 0; m < marknum; m++) {
+        // Define randomized regular coordinates
         xm(m) = xbeg + floor(m / Ny_markers) * dxms + (rand() % 1) * dxms;
         ym(m) = ybeg + m % Ny_markers * dyms + (rand() % 1) * dyms;
         // Matrix
         porm(m) = .01 * (1 + .0 * (rand() % 1 - .5));
         etam(m) = etasm(m) * exp(-alpha * porm(m));
 
+        // Air, wedge, slab
         if (ym(m) < upper_block || ym(m) > lower_block) {
             t_marker(m) = -1;
-            rhom(m) = 2800;
             etam(m) = 1e23;
             etasm(m) = 1e23;
+            rhom(m) = 2800;
+            kkkm(m) = 2e-16; // * (dy / faultwidth)^2;
             cohescm(m) = cohes * 1e3;
             cohestm(m) = cohes * 1e3;
             frictcm(m) = .8;
             dilatcm(m) = dilatation;
             fricttm(m) = tensile;
-            kkkm(m) = 2e-16; // * (dy / faultwidth)^2;  // does not change the value of that variable
         }
     }
 
@@ -345,15 +319,17 @@ int main() {
     // Pressure nodes
     MatXd ETAPSUM(Ny1, Nx1), ETAP0SUM(Ny1, Nx1), ETAB0SUM(Ny1, Nx1), PORSUM(Ny1, Nx1), SXXSUM(Ny1, Nx1), SYYSUM(Ny1, Nx1), GGGPSUM(Ny1, Nx1), WTPSUM(Ny1, Nx1);
     // Vx nodes
-    MatXd RHOXSUM(Ny1, Nx1), RHOFXSUM(Ny1, Nx1), ETADXSUM(Ny1, Nx1), PORXSUM(Ny1, Nx1), VX0SUM(Ny1, Nx1), WTXSUM(Ny1, Nx1);
+    MatXd RHOXSUM(Ny1, Nx1), RHOFXSUM(Ny1, Nx1), ETADXSUM(Ny1, Nx1), PORXSUM(Ny1, Nx1), WTXSUM(Ny1, Nx1);
     // Vy nodes
-    MatXd RHOYSUM(Ny1, Nx1), RHOFYSUM(Ny1, Nx1), ETADYSUM(Ny1, Nx1), PORYSUM(Ny1, Nx1), VY0SUM(Ny1, Nx1), WTYSUM(Ny1, Nx1);
+    MatXd RHOYSUM(Ny1, Nx1), RHOFYSUM(Ny1, Nx1), ETADYSUM(Ny1, Nx1), PORYSUM(Ny1, Nx1), WTYSUM(Ny1, Nx1);
 
     MatXd ETA50(Ny, Nx);
 
     auto start = hrc::now();
     auto stop = hrc::now();
     auto out_stop = hrc::now();
+    auto start_parallel = hrc::now();
+    auto stop_parallel = hrc::now();
     
     // /////////////////////////////////////////////////////////////////////////////////////// 
     // actual computations start here
@@ -364,7 +340,7 @@ int main() {
 
         for (auto i : {RHOSUM, ETASUM, KKKSUM, TTTSUM, SXYSUM, GGGSUM, ETA, ETA0SUM, COHCSUM, FRICSUM, DILCSUM, COHTSUM, FRITSUM, WTSUM, 
                        OM0SUM, OMSUM, ARSFSUM, BRSFSUM, LRSFSUM, ETAPSUM, ETAP0SUM, ETAB0SUM, PORSUM, SXXSUM, SYYSUM, GGGPSUM, WTPSUM,
-                       RHOXSUM, RHOFXSUM, ETADXSUM, PORXSUM, VX0SUM, WTXSUM, RHOYSUM, RHOFYSUM, ETADYSUM, PORYSUM, VY0SUM, WTYSUM}) {
+                       RHOXSUM, RHOFXSUM, ETADXSUM, PORXSUM, WTXSUM, RHOYSUM, RHOFYSUM, ETADYSUM, PORYSUM, WTYSUM}) {
             i.setZero();
         }
         
@@ -417,11 +393,8 @@ int main() {
             //   |                |
             // [i + 1, j] ------- [i + 1, j + 1]
             // Indexes and distances
-            double j = fix(xm(m) / dx);
-            double i = fix(ym(m) / dy);
-
-            j = check_bounds(j, Nx);
-            i = check_bounds(i, Ny);
+            int j = check_bounds(fix(xm(m) / dx), Nx);
+            int i = check_bounds(fix(ym(m) / dy), Ny);
             
             double dxm = (xm(m) - x(j)) / dx;
             double dym = (ym(m) - y(i)) / dy;
@@ -456,11 +429,8 @@ int main() {
             //   |                |
             // [i + 1, j] ------- [i + 1, j + 1]
             // Indexes and distances
-            j = fix((xm(m) + dx / 2.) / dx);
-            i = fix((ym(m) + dy / 2.) / dy);
-
-            j = check_bounds(j, Nx);
-            i = check_bounds(i, Ny);
+            j = check_bounds(fix((xm(m) + dx / 2.) / dx), Nx);
+            i = check_bounds(fix((ym(m) + dy / 2.) / dy), Ny);
             
             dxm = (xm(m) - xp(j)) / dx;
             dym = (ym(m) - yp(i)) / dy;
@@ -484,11 +454,8 @@ int main() {
             //   |                |
             // [i + 1, j] ------- [i + 1, j + 1]
             // Indexes and distances
-            j = fix((xm(m)) / dx);
-            i = fix((ym(m) + dy / 2.) / dy);
-
-            j = check_bounds(j, Nx);
-            i = check_bounds(i, Ny);
+            j = check_bounds(fix((xm(m)) / dx), Nx);
+            i = check_bounds(fix((ym(m) + dy / 2.) / dy), Ny);
             
             dxm = (xm(m) - xvx(j)) / dx;
             dym = (ym(m) - yvx(i)) / dy;
@@ -509,11 +476,8 @@ int main() {
             //   |                |
             // [i + 1, j] ------- [i + 1, j + 1]
             // Indexes and distances
-            j = fix((xm(m) + dx / 2.) / dx);
-            i = fix((ym(m)) / dy);
-
-            j = check_bounds(j, Nx);
-            i = check_bounds(i, Ny);
+            j = check_bounds(fix((xm(m) + dx / 2.) / dx), Nx);
+            i = check_bounds(fix((ym(m)) / dy), Ny);
         
             dxm = (xm(m) - xvy(j)) / dx;
             dym = (ym(m) - yvy(i)) / dy;
@@ -608,10 +572,6 @@ int main() {
         DSYLSQ.setZero();
         
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
-            for (auto i : {EXY, SXY, EXX, SXX, EYY, SYY, DILP, EL_DECOM, VIS_COMP}) {
-                i.setZero();
-            }
-
             // Limiting viscosity
             double etamincur = dt * shearmod * 1e-4;
             
@@ -668,7 +628,7 @@ int main() {
                     // double bb = bb1 + bb2 * exp(-ss3 / bb3);
                     // double cc = cc1 + cc2 / 100. * pow(ss3, cc3);
                     // double dil = sin(aa * bb * (exp(-bb * gammap) - exp(-cc * gammap)) / (cc - bb) / 180. * pi);
-                    // DILP(i, j) = 2 * (dil * EIIB(i - 1, j - 1) + dil * EIIB(i, j - 1) + dil * EIIB(i - 1, j) + dil * EIIB(i, j)) / 4;
+                    DILP(i, j) = 0; // 2 * (dil * EIIB(i - 1, j - 1) + dil * EIIB(i, j - 1) + dil * EIIB(i - 1, j) + dil * EIIB(i, j)) / 4;
                 }
             }
             
@@ -771,13 +731,13 @@ int main() {
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
                         double temp = gx * dt * dRHOdy / 4.;
                         double dx_dy = dx * dy;
-                        Trip.insert(Trip.end(), {Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - ascale * RHOX(i, j) / dt), Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2), 
+                        Trip.insert(Trip.end(), {Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - inertia * RHOX(i, j) / dt), Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2), 
                                     Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2), Trp(kx, kx - 6, ETAXY1 / dy2), Trp(kx, kx + 6, ETAXY2 / dy2), /* vxs3, vxs1, vxs5, vxs2, vxs4 */
                                     Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - temp), Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - temp),
                                     Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - temp), Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - temp), /* vys1, vys2, vys3, vys4 */
                                     Trp(kx, kp, ptscale / dx), Trp(kx, kp + Ny1 * 6, -ptscale / dx)}); /* Pt1', Pt2' */
                         // Right part
-                        R(kx) = -RHOX(i, j) * (ascale * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
+                        R(kx) = -RHOX(i, j) * (inertia * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
                     
                     // 5b) Composing equation for vys
@@ -808,7 +768,6 @@ int main() {
                         if (i == Ny - 1 && j > 0 && j < Nx) {
                             Trip.push_back(Trp(ky, ky, 1));
                         }
-                        
                     } else {
                         // Total Y - Stokes: dSIGMAyxt' / dx + dSIGMAyyt' / dy - dPt / dy = -RHOt * gy
                         // y - Stokes equation: dSIGMA'yx / dx + dSIGMA'yy / dy - dP / dy = -RHO * gy
@@ -854,13 +813,13 @@ int main() {
                         double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
                         double temp = gy * dt * dRHOdx / 4.;
                         double dx_dy = dx * dy;
-                        Trip.insert(Trip.end(), {Trp(ky, ky, -(ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - ascale * RHOY(i, j) / dt), Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2),
+                        Trip.insert(Trip.end(), {Trp(ky, ky, -(ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - inertia * RHOY(i, j) / dt), Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2),
                                     Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2), Trp(ky, ky - 6, ETAYY1 / dy2), Trp(ky, ky + 6, ETAYY2 / dy2), /* vys3, vys1, vys5, vys2, vys4 */
                                     Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - temp), Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - temp),
                                     Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - temp), Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - temp), /* vxs1, vxs2, vxs3, vxs4 */
                                     Trp(ky, kp, ptscale / dy), Trp(ky, kp + 6, -ptscale / dy)}); /* Pt1', Pt2' */
                         // Right part
-                        R(ky) = -RHOY(i, j) * (ascale * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
+                        R(ky) = -RHOY(i, j) * (inertia * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
 
                     // 5c) Composing equation for Pt
@@ -920,10 +879,10 @@ int main() {
                         //  Pf1 --- vxD, vxs --- Pf2
                         //
                         // Left part
-                        Trip.insert(Trip.end(), {Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * ascale / dt), Trp(kxf, kx, -RHOFX(i, j) * ascale / dt), /* vxD, vxs */
+                        Trip.insert(Trip.end(), {Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * inertia / dt), Trp(kxf, kx, -RHOFX(i, j) * inertia / dt), /* vxD, vxs */
                                     Trp(kxf, kpf, pfscale / dx), Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)}); /* Pf1', Pf2' */
                         // Right part
-                        R(kxf) = -RHOFX(i, j) * (ascale * VXF0(i, j) / dt + gx);
+                        R(kxf) = -RHOFX(i, j) * (inertia * VXF0(i, j) / dt + gx);
                     }
                     
                     // 5e) Composing equation for vyD
@@ -966,10 +925,10 @@ int main() {
                         //   Pf2
                         //
                         // Left part
-                        Trip.insert(Trip.end(), {Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * ascale / dt), Trp(kyf, ky, -RHOFY(i, j) * ascale / dt), /* vyD, vys */
+                        Trip.insert(Trip.end(), {Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * inertia / dt), Trp(kyf, ky, -RHOFY(i, j) * inertia / dt), /* vyD, vys */
                                     Trp(kyf, kpf, pfscale / dy), Trp(kyf, kpf + 6, -pfscale / dy)}); /* Pf1', Pf2' */
                         // Right part
-                        R(kyf) = -RHOFY(i, j) * (ascale * VYF0(i, j) / dt + gy);
+                        R(kyf) = -RHOFY(i, j) * (inertia * VYF0(i, j) / dt + gy);
                     }
                                         
                     // 5f) Composing equation for Pf
@@ -1016,6 +975,9 @@ int main() {
             // 7) Reload solution
             // pfavr = 0;
             // pcount = 0;
+            
+            // slightly slower in parallel
+            // #pragma omp parallel for collapse(2)
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Global indexes for vx, vy, P
@@ -1049,6 +1011,10 @@ int main() {
             
             // Plastic iterations
             // Compute strain rate, stress and stress change
+            for (auto i : {EXY, SXY, EXX, SXX, EYY, SYY, EL_DECOM, VIS_COMP}) {
+                i.setZero();
+            }
+
             // Process internal basic nodes
             for (int i = 0; i < Ny; i++) {
                 for (int j = 0; j < Nx; j++) {
@@ -1195,7 +1161,7 @@ int main() {
                             // "/ BETASOLID" -> Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
                             double vi = (3. / BETASOLID - g_temp) / (6. / BETASOLID + g_temp);
                             double k = g_temp / (pi * (1 - vi) * dx);
-                            double xi = pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) / 4 - k * lrsf_temp / arsf_temp / prB;
+                            double xi = pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) / 4. - k * lrsf_temp / arsf_temp / prB;
                             double dTETAmax;
                             if (xi < 0) {
                                 dTETAmax = min(1. - (brsf_temp - arsf_temp) * prB / (k * lrsf_temp), .2);
@@ -1291,7 +1257,7 @@ int main() {
             maxvys = 0;
 
             for (int i = 0; i < Ny1; i++) {
-                    for (int j = 0; j < Nx1; j++) {
+                for (int j = 0; j < Nx1; j++) {
                     if (yvx(i) >= upper_block && yvx(i) <= lower_block) {
                         maxvxs = max(maxvxs, abs(vxs(i, j)));
                     }
@@ -1313,7 +1279,7 @@ int main() {
             
             dtslip = 1e30;
             for (int i = 0; i < Ny; i++) {
-                    for (int j = 0; j < Nx; j++) {
+                for (int j = 0; j < Nx; j++) {
                     if (VSLIPB(i, j) > 0) {
                         dtslip = min(dtslip, dx * stpmax / VSLIPB(i, j));
                     }
@@ -1399,6 +1365,7 @@ int main() {
         }
 
         // Process pressure cells
+        // #pragma omp parallel for collapse(2) // about 2x faster with n = 4
         for (int i = 1; i < Ny; i++) {
             for (int j = 1; j < Nx; j++) {
                 // EXX, SXX
@@ -1409,21 +1376,18 @@ int main() {
                 SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
         
                 // Compute stress and strain rate invariants and dissipation
-                Matrix2d SXY_temp = SXY.block(i - 1, j - 1, 2, 2);
-                Matrix2d ETA_temp = 2 * SXY.block(i - 1, j - 1, 2, 2);
+                Matrix2d temp;
+                temp << SXY(i - 1, j - 1) / 2 * ETA(i - 1, j - 1), SXY(i - 1, j) / 2 * ETA(i - 1, j), SXY(i, j - 1) / 2 * ETA(i, j - 1), SXY(i, j) / 2 * ETA(i, j);
 
                 // EXY term is averaged from four surrounding basic nodes
-                double EXY2 = (pow(EXY(i, j), 2) + pow(EXY(i - 1, j), 2) + pow(EXY(i, j - 1), 2) + pow(EXY(i - 1, j - 1), 2)) / 4.;
-                EII(i, j) = sqrt(pow(EXX(i, j), 2) + EXY2);
-                double EXYVP2 = (pow(SXY_temp(1, 1) / ETA_temp(1, 1), 2) + pow(SXY_temp(0, 1) / ETA_temp(0, 1), 2) + pow(SXY_temp(1, 0) / ETA_temp(1, 0), 2) + pow(SXY_temp(0, 0) / ETA_temp(0, 0), 2)) / 4.;
-                EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + EXYVP2);
+                EII(i, j) = sqrt(pow(EXX(i, j), 2) + square_block(EXY.block(i - 1, j - 1, 2, 2)) / 4.);
+                EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + square_block(temp) / 4.);
                 // Second strain rate invariant SII
                 // SXY term is averaged from four surrounding basic nodes
-                double SXY2 = (pow(SXY_temp(1, 1), 2) + pow(SXY_temp(0, 1), 2) + pow(SXY_temp(1, 0), 2) + pow(SXY_temp(0, 0), 2)) / 4.;
-                SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + SXY2);
+                SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + square_block(SXY.block(i - 1, j - 1, 2, 2)) / 4.);
                 
                 // Dissipation
-                double DISXY = (pow(SXY_temp(1, 1), 2) / ETA_temp(1, 1) + pow(SXY_temp(0, 1), 2) /  ETA_temp(0, 1) + pow(SXY_temp(1, 0), 2) / ETA_temp(1, 0) + pow(SXY_temp(0, 0), 2) / ETA_temp(0, 0)) / 4.;
+                double DISXY = (pow(SXY(i, j), 2) / 2 * ETA(i, j) + pow(SXY(i - 1, j), 2) / 2 * ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / 2 * ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / 2 * ETA(i - 1, j - 1)) / 4.;
                 DIS(i, j) = pow(SXX(i, j), 2) / (2 * ETAP(i, j)) + pow(SYY(i, j), 2) / (2 * ETAP(i, j)) + 2 * DISXY;
                 
                 double PT0_ave, PF0_ave;
@@ -1449,7 +1413,10 @@ int main() {
             }
         }
 
+        start_parallel = hrc::now();
+
         // Move markers by nodal velocity field
+        // #pragma omp parallel for // 3x slower for n = 4
         for (int m = 0; m < 0; m++) {
         // for (int m = 0; m < marknum; m++) {
             Vector4d vxm = Vector4d::Zero(), vym = Vector4d::Zero(), spm = Vector4d::Zero(); // Runge-Kutta velocity, spin array
@@ -1463,20 +1430,16 @@ int main() {
                 //   |    o m         |
                 //   |                |
                 // [i + 1, j] ------- [i + 1, j + 1]
-                // Indexes and distances
-                int j = fix(xm(m) / dx);
-                int i = fix((ym(m) + dy / 2.) / dy);
-                
-                j = check_bounds(j, Nx);
-                i = check_bounds(i, Ny);
+                // Indexes and distances                
+                int j = check_bounds(fix(xm(m) / dx), Nx);
+                int i = check_bounds(fix((ym(m) + dy / 2.) / dy), Ny);
 
                 //Distances
                 double dxm = (xm(m) - xvx(j)) / dx;
                 double dym = (ym(m) - yvx(i)) / dy;
                 // Weights
-                Matrix2d temp = vxs.block(i, j, 2, 2);
                 // Interpolation
-                vxm(rk) = temp(0, 0) * (1 - dxm) * (1 - dym) + temp(1, 0) * (1 - dxm) * dym + temp(0, 1) * dxm * (1 - dym) + temp(1, 1) * dxm * dym;
+                vxm(rk) = vxs(i, j) * (1 - dxm) * (1 - dym) + vxs(i + 1, j) * (1 - dxm) * dym + vxs(i, j + 1) * dxm * (1 - dym) + vxs(i + 1, j + 1) * dxm * dym;
                 
                 // vy - velocity interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1485,19 +1448,15 @@ int main() {
                 //   |                |
                 // [i + 1, j] ------- [i + 1, j + 1]
                 // Indexes and distances
-                j = fix((xm(m) + dx / 2.) / dx);
-                i = fix(ym(m) / dy);
-
-                j = check_bounds(j, Nx);
-                i = check_bounds(i, Ny);
+                j = check_bounds(fix((xm(m) + dx / 2.) / dx), Nx);
+                i = check_bounds(fix(ym(m) / dy), Ny);
 
                 //Distances
                 dxm = (xm(m) - xvy(j)) / dx;
                 dym = (ym(m) - yvy(i)) / dy;
                 // Weights
-                temp = vys.block(i, j, 2, 2);
                 // Interpolation
-                vym(rk) = temp(0, 0) * (1 - dxm) * (1 - dym) + temp(1, 0) * (1 - dxm) * dym + temp(0, 1) * dxm * (1 - dym) + temp(1, 1) * dxm * dym;
+                vym(rk) = vys(i, j) * (1 - dxm) * (1 - dym) + vys(i + 1, j) * (1 - dxm) * dym + vys(i, j + 1) * dxm * (1 - dym) + vys(i + 1, j + 1) * dxm * dym;
                 
                 // ESP = .5 *(dVy / dx - dVx / dy) interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1506,19 +1465,15 @@ int main() {
                 //   |                |
                 // [i + 1, j] ------- [i + 1, j + 1]
                 // Indexes and distances
-                j = fix((xm(m)) / dx);
-                i = fix((ym(m)) / dy);
-
-                j = check_bounds(j, Nx);
-                i = check_bounds(i, Ny);
+                j = check_bounds(fix((xm(m)) / dx), Nx);
+                i = check_bounds(fix((ym(m)) / dy), Ny);
                 
                 //Distances
                 dxm = (xm(m) - x(j)) / dx;
                 dym = (ym(m) - y(i)) / dy;
                 // Weights
-                temp = ESP.block(i, j, 2, 2);
                 // Interpolation ESP = .5 *(dVy / dx - dVx / dy) for the marker
-                spm(rk) = temp(0, 0) * (1 - dxm) * (1 - dym) + temp(1, 0) * (1 - dxm) * dym + temp(0, 1) * dxm * (1 - dym) + temp(1, 1) * dxm * dym;
+                spm(rk) = ESP(i, j) * (1 - dxm) * (1 - dym) + ESP(i + 1, j) * (1 - dxm) * dym + ESP(i, j + 1) * dxm * (1 - dym) + ESP(i + 1, j + 1) * dxm * dym;
                 
                 // Moving between A, B, C, D points
                 if (rk < 2) {
@@ -1534,13 +1489,12 @@ int main() {
             // Compute effective velocity, rotation rate
             double vxeff = (vxm(0) + 2 * vxm(1) + 2 * vxm(2) + vxm(3)) / 6.;
             double vyeff = (vym(0) + 2 * vym(1) + 2 * vym(2) + vym(3)) / 6.;
-            double speff = spm(0);
             
             // Rotate stress on marker according to its spin
             // Compute amount of rotation from spin rate:
             // Espin = .5 *(dvy / dx - dvx / dy) i.e. positive for clockwise rotation
             // (when x axis is directed rightward and y axis is directed downward)
-            double dspeff = speff * dt;
+            double dspeff = spm(0) * dt;
             // Save old stresses
             double msxxold = sxxm(m);
             double msyyold = syym(m);
@@ -1561,6 +1515,9 @@ int main() {
                 xm(m) = xm(m) - xsize;
             }
         }
+
+        stop_parallel = hrc::now();
+        parallel_tot += (double)chrono::duration_cast<microseconds>(stop_parallel - start_parallel).count();
 
         int temp = timestep - 1;
         
@@ -1762,10 +1719,12 @@ int main() {
         output_time += (double)chrono::duration_cast<microseconds>(out_stop - stop).count();
     }
 
-    cout << "\nTotal runtime:   " << runtime / 1000000 << " seconds" << endl;
-    cout << "Total output time:   " << output_time / 1000000 << " seconds" << endl;
+    cout << "\nTotal runtime:        " << runtime / 1000000 << " seconds" << endl;
+    cout << "Total output time:      " << output_time / 1000000 << " seconds" << endl;
     cout << "Average per timestep:   " << runtime / 1000 / num_timesteps << " milliseconds" << endl;
-    cout << "Average per output:   " << output_time / 1000 / num_timesteps << " milliseconds" << endl;
+    cout << "Average per output:     " << output_time / 1000 / num_timesteps << " milliseconds" << endl;
+
+    cout << "Parallel time:          " << parallel_tot / 1000 << " milliseconds" << endl;
 
     return 0;
 }
