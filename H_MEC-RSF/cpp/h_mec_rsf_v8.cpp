@@ -103,7 +103,7 @@ double timesum = 0;
 double dt = dtelastic0;
 bool yndtdecrease = true;
 
-double dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy;
+double dt00, dtx, dty, KXY, KSK, dtlapusta, pfscale, ptscale, Vmax, maxvxy;
 
 VecXd DSYLSQ(niterglobal);
 
@@ -239,10 +239,10 @@ int main() {
             j++;
         }
 
-        hsize_t dim2[1] = {15};
+        hsize_t dim2[1] = {13};
         VecXd temp = read_vector(filename, group_values, "values", dim2);
-        timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); KXX = temp(4); KXY = temp(5); KSK = temp(6);
-        BETADRAINED = temp(7); dtlapusta = temp(8); pfscale = temp(9); ptscale = temp(10); Vmax = temp(11); maxvxy = temp(12); dt = temp(13), yndtdecrease = temp(14);
+        timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); KXY = temp(4); KSK = temp(5);
+        dtlapusta = temp(6); pfscale = temp(7); ptscale = temp(8); Vmax = temp(9); maxvxy = temp(10); dt = temp(11), yndtdecrease = temp(12);
 
         timestep++;
     } else {
@@ -834,7 +834,7 @@ int main() {
                         //               |
                         //              vys2
                         // Drained compressibility
-                        BETADRAINED = (1. / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                        double BETADRAINED = (1. / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
                         double KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
@@ -950,7 +950,7 @@ int main() {
                         //              vyD2
                         // Compute elastic coefficients
                         // Drained compressibility
-                        BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                        double BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
                         double KBW = 1 - BETASOLID / BETADRAINED;
                         // Skempton koefficient
@@ -1030,7 +1030,7 @@ int main() {
                     // EXX, SXX
                     EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
                     EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
-                    KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
+                    double KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
                     SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
                     SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
                 }
@@ -1365,19 +1365,19 @@ int main() {
         }
 
         // Process pressure cells
-        // #pragma omp parallel for collapse(2) // about 2x faster with n = 4
+        // #pragma omp parallel for collapse(2) // about 2x faster with n = 4 but breaks the simulation
         for (int i = 1; i < Ny; i++) {
             for (int j = 1; j < Nx; j++) {
                 // EXX, SXX
                 EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
                 EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
-                KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
+                double KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
                 SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
                 SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
         
                 // Compute stress and strain rate invariants and dissipation
                 Matrix2d temp;
-                temp << SXY(i - 1, j - 1) / 2 * ETA(i - 1, j - 1), SXY(i - 1, j) / 2 * ETA(i - 1, j), SXY(i, j - 1) / 2 * ETA(i, j - 1), SXY(i, j) / 2 * ETA(i, j);
+                temp << SXY(i - 1, j - 1) / (2 * ETA(i - 1, j - 1)), SXY(i - 1, j) / (2 * ETA(i - 1, j)), SXY(i, j - 1) / (2 * ETA(i, j - 1)), SXY(i, j) / (2 * ETA(i, j));
 
                 // EXY term is averaged from four surrounding basic nodes
                 EII(i, j) = sqrt(pow(EXX(i, j), 2) + square_block(EXY.block(i - 1, j - 1, 2, 2)) / 4.);
@@ -1406,7 +1406,7 @@ int main() {
                 // Compute elastic and viscous compaction
                 VIS_COMP(i, j) = (pt_ave(i, j) - pf_ave(i, j)) / (ETAB(i, j) * (1 - POR(i, j)));
                 // Drained compressibility
-                BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                double BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                 // Biott - Willis koefficient
                 double KBW = 1 - BETASOLID / BETADRAINED;
                 EL_DECOM(i, j) = BETADRAINED * (pt_ave(i, j) - PT0_ave - KBW * pf_ave(i, j) + KBW * PF0_ave) / dt;
@@ -1709,9 +1709,9 @@ int main() {
                 j++;
             }
 
-            hsize_t dim3[1] = {15};
-            VecXd temp(15);
-            temp << timesum, dt00, dtx, dty, KXX, KXY, KSK, BETADRAINED, dtlapusta, pfscale, ptscale, Vmax, maxvxy, dt, yndtdecrease;
+            hsize_t dim3[1] = {13};
+            VecXd temp(13);
+            temp << timesum, dt00, dtx, dty, KXY, KSK, dtlapusta, pfscale, ptscale, Vmax, maxvxy, dt, yndtdecrease;
             add_vector(save_file_name, group_values, temp, "values", dim3);
         }
 
