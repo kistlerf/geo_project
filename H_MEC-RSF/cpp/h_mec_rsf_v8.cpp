@@ -163,7 +163,7 @@ int main() {
     // srand(time(nullptr));
     // ====================================================================================
 
-    double runtime = 0, output_time = 0, parallel_tot = 0;
+    double runtime = 0, output_time = 0;
 
     // read input
     // Load file
@@ -328,8 +328,6 @@ int main() {
     auto start = hrc::now();
     auto stop = hrc::now();
     auto out_stop = hrc::now();
-    auto start_parallel = hrc::now();
-    auto stop_parallel = hrc::now();
     
     // /////////////////////////////////////////////////////////////////////////////////////// 
     // actual computations start here
@@ -651,7 +649,7 @@ int main() {
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Computing global indexes for vx, vy, p
-                    int kp = (j * Ny1 + i) * 6;
+                    int kp = (j * Ny1 + i) * Num_var;
                     int kx = kp + 1;
                     int ky = kp + 2;
                     int kpf = kp + 3;
@@ -981,7 +979,7 @@ int main() {
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Global indexes for vx, vy, P
-                    int kp = (j * Ny1 + i) * 6;
+                    int kp = (j * Ny1 + i) * Num_var;
                     // Reload solution
                     pt(i, j) = S(kp) * ptscale;
                     vxs(i, j) = S(kp + 1);
@@ -1413,8 +1411,6 @@ int main() {
             }
         }
 
-        start_parallel = hrc::now();
-
         // Move markers by nodal velocity field
         // #pragma omp parallel for // 3x slower for n = 4
         for (int m = 0; m < 0; m++) {
@@ -1515,9 +1511,6 @@ int main() {
                 xm(m) = xm(m) - xsize;
             }
         }
-
-        stop_parallel = hrc::now();
-        parallel_tot += (double)chrono::duration_cast<microseconds>(stop_parallel - start_parallel).count();
 
         int temp = timestep - 1;
         
@@ -1723,8 +1716,6 @@ int main() {
     cout << "Total output time:      " << output_time / 1000000 << " seconds" << endl;
     cout << "Average per timestep:   " << runtime / 1000 / num_timesteps << " milliseconds" << endl;
     cout << "Average per output:     " << output_time / 1000 / num_timesteps << " milliseconds" << endl;
-
-    cout << "Parallel time:          " << parallel_tot / 1000 << " milliseconds" << endl;
 
     return 0;
 }
