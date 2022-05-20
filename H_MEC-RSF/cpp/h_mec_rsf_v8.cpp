@@ -103,7 +103,7 @@ double timesum = 0;
 double dt = dtelastic0;
 bool yndtdecrease = true;
 
-double dt00, dtx, dty, KXY, KSK, dtlapusta, pfscale, ptscale, Vmax, maxvxy;
+double dt00, dtx, dty, dtlapusta, Vmax, maxvxy;
 
 VecXd DSYLSQ(niterglobal);
 
@@ -134,6 +134,11 @@ auto enforce_bounds = [](double val, double min, double max) {
 // lambda function that squares each element of a 2x2 block
 auto square_block = [](Matrix2d mat) {
     return (pow(mat(0, 0), 2) + pow(mat(0, 1), 2) + pow(mat(1, 0), 2) + pow(mat(1, 1), 2));
+};
+
+// lambda function that computes: x / (x + y)
+auto divplus = [](double x, double y) {
+    return (x / (x + y));
 };
 
 // function that checks if a integer value is bigger than 0 and lower than a set bound
@@ -239,10 +244,9 @@ int main() {
             j++;
         }
 
-        hsize_t dim2[1] = {13};
+        hsize_t dim2[1] = {9};
         VecXd temp = read_vector(filename, group_values, "values", dim2);
-        timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); KXY = temp(4); KSK = temp(5);
-        dtlapusta = temp(6); pfscale = temp(7); ptscale = temp(8); Vmax = temp(9); maxvxy = temp(10); dt = temp(11), yndtdecrease = temp(12);
+        timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); dtlapusta = temp(4); Vmax = temp(5); maxvxy = temp(6); dt = temp(7), yndtdecrease = temp(8);
 
         timestep++;
     } else {
@@ -572,6 +576,7 @@ int main() {
         for (iterstep = 0; iterstep < niterglobal; iterstep++) {
             // Limiting viscosity
             double etamincur = dt * shearmod * 1e-4;
+            double ptscale, pfscale;
             
             // External P - nodes: symmetry
             copy_bounds(pt);
@@ -585,11 +590,10 @@ int main() {
                     }
                     // Compute plastic strain rate
                     if (ETA(i, j) < ETA0(i, j)) {
-                        double SXX_tot_4 = (SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1)) / 4.;
-                        double SYY_tot_4 = (SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1)) / 4.;
-                        SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow(SXX_tot_4, 2) + .5 * pow(SYY_tot_4, 2) + .5 * pow(-SXX_tot_4 - SYY_tot_4, 2));
-                        EIIB(i, j) = dy / faultwidth * (SIIB(i, j) / 2. / ETA(i, j) - SIIB(i, j) / 2. / ETA0(i, j));
+                        const double SXX_temp = SXX.block(i, j, 2, 2).sum(), SYY_temp = SYY.block(i, j, 2, 2).sum();
+                        SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + (pow(SXX_temp, 2) + pow(SYY_temp, 2) + pow(SXX_temp + SYY_temp, 2)) / 32.);
                         IETAPLB(i, j) = (1. / ETA(i, j) - 1. / ETA0(i, j));
+                        EIIB(i, j) = dy / faultwidth * SIIB(i, j) * IETAPLB(i, j) / 2.;
                     } else {
                         EIIB(i, j) = 0;
                         IETAPLB(i, j) = 0;
@@ -601,7 +605,7 @@ int main() {
             for (int i = 1; i < Ny; i++) {
                 for (int j = 1; j < Nx; j++) {
                     // Compute viscoplastic viscosity
-                    double IETAPL = (IETAPLB(i - 1, j - 1) + IETAPLB(i, j - 1) + IETAPLB(i - 1, j) + IETAPLB(i, j)) / 4.;
+                    const double IETAPL = IETAPLB.block(i - 1, j - 1, 2, 2).sum() / 4.;
                     if (YNY0(i - 1, j - 1) > 0 || YNY0(i, j - 1) > 0 || YNY0(i - 1, j) > 0 || YNY0(i, j) > 0) {
                         ETAP(i, j) = 1. / (1. / ETAP0(i, j) + IETAPL);
                         ETAB(i, j) = 1. / (1. / ETAB0(i, j) + dy / faultwidth * IETAPL * POR(i, j));
@@ -642,7 +646,7 @@ int main() {
             // 5)Composing global matrixes L(), R()
 
             vector<Trp> Trip; // define triplet list to build sparse matrix
-            Trip.reserve(N * 10);
+            Trip.reserve(N * 10); // reserving memory space for all the entries to be stored with some reserve
 
             R.setZero();
             
@@ -666,25 +670,25 @@ int main() {
                         // Upper boundary
                         // prescribed velocity
                         if (i == 0 && j < Nx) {
-                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx + 6, 1)});
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx + Num_var, 1)});
                             R(kx) = 2 * bcupper;
                         }
                         
                         // Lower boundary
                         // prescribed velocity
                         if (i == Ny && j < Nx) {
-                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx - 6, 1)});
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx - Num_var, 1)});
                             R(kx) = 2 * bclower;
                         }
                         
                         // Left boundary
                         if (j == 0 && i > 0 && i < Ny) {
-                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx + 6 * Ny1, -1)});
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx + Num_var * Ny1, -1)});
                         }
                         
                         // Right boundary
                         if (j == Nx - 1 && i > 0 && i < Ny) {
-                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx - 6 * Ny1, -1)});
+                            Trip.insert(Trip.end(), {Trp(kx, kx, 1), Trp(kx, kx - Num_var * Ny1, -1)});
                         }
                         
                     } else {
@@ -698,42 +702,32 @@ int main() {
                         //        vys2  |    vys4
                         //             vxs4
                         // Viscosity
-                        double ETAXY1 = ETA(i - 1, j);
-                        double ETAXY2 = ETA(i, j);
-                        double ETAXX1 = ETAP(i, j);
-                        double ETAXX2 = ETAP(i, j + 1);
+                        double ETAXY1 = ETA(i - 1, j), ETAXY2 = ETA(i, j);
+                        double ETAXX1 = ETAP(i, j), ETAXX2 = ETAP(i, j + 1);
                         // Shear modulus
-                        double GXY1 = GGG(i - 1, j);
-                        double GXY2 = GGG(i, j);
-                        double GXX1 = GGGP(i, j);
-                        double GXX2 = GGGP(i, j + 1);
+                        const double GXY1 = GGG(i - 1, j), GXY2 = GGG(i, j);
+                        const double GXX1 = GGGP(i, j), GXX2 = GGGP(i, j + 1);
                         // Viscoelasticity factor
-                        double KXY1 = dt * GXY1 / (dt * GXY1 + ETAXY1);
-                        double KXY2 = dt * GXY2 / (dt * GXY2 + ETAXY2);
-                        double KXX1 = dt * GXX1 / (dt * GXX1 + ETAXX1);
-                        double KXX2 = dt * GXX2 / (dt * GXX2 + ETAXX2);
+                        const double KXY1 = divplus(dt * GXY1, ETAXY1), KXY2 = divplus(dt * GXY2, ETAXY2);
+                        const double KXX1 = divplus(dt * GXX1, ETAXX1), KXX2 = divplus(dt * GXX2, ETAXX2);
                         // Numerical viscosity
                         ETAXY1 *= KXY1;
                         ETAXY2 *= KXY2;
                         ETAXX1 *= KXX1;
                         ETAXX2 *= KXX2;
                         // Numerical stresses
-                        double SXY1 = SXY0(i - 1, j) * (1 - KXY1);
-                        double SXY2 = SXY0(i, j) * (1 - KXY2);
-                        double SXX1 = SXX0(i, j) * (1 - KXX1);
-                        double SXX2 = SXX0(i, j + 1) * (1 - KXX2);
+                        const double SXY1 = SXY0(i - 1, j) * (1 - KXY1), SXY2 = SXY0(i, j) * (1 - KXY2);
+                        const double SXX1 = SXX0(i, j) * (1 - KXX1), SXX2 = SXX0(i, j + 1) * (1 - KXX2);
                         // Density derivatives
-                        double dRHOdx = (RHOX(i, j + 1) - RHOX(i, j - 1)) / (2. * dx);
-                        double dRHOdy = (RHO(i, j) - RHO(i - 1, j)) / dy;
+                        const double dRHOdx = (RHOX(i, j + 1) - RHOX(i, j - 1)) / (2. * dx);
+                        const double dRHOdy = (RHO(i, j) - RHO(i - 1, j)) / dy;
                         // Left part
-                        double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        double temp = gx * dt * dRHOdy / 4.;
-                        double dx_dy = dx * dy;
-                        Trip.insert(Trip.end(), {Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - inertia * RHOX(i, j) / dt), Trp(kx, kx - Ny1 * 6, ETAXX1 / dx2), 
-                                    Trp(kx, kx + Ny1 * 6, ETAXX2 / dx2), Trp(kx, kx - 6, ETAXY1 / dy2), Trp(kx, kx + 6, ETAXY2 / dy2), /* vxs3, vxs1, vxs5, vxs2, vxs4 */
-                                    Trp(kx, ky - 6, ETAXY1 / dx_dy - ETAXX1 / dx_dy - temp), Trp(kx, ky, -ETAXY2 / dx_dy + ETAXX1 / dx_dy - temp),
-                                    Trp(kx, ky - 6 + Ny1 * 6, -ETAXY1 / dx_dy + ETAXX2 / dx_dy - temp), Trp(kx, ky + Ny1 * 6, ETAXY2 / dx_dy - ETAXX2 / dx_dy - temp), /* vys1, vys2, vys3, vys4 */
-                                    Trp(kx, kp, ptscale / dx), Trp(kx, kp + Ny1 * 6, -ptscale / dx)}); /* Pt1', Pt2' */
+                        const double temp = gx * dt * dRHOdy / 4.;
+                        Trip.insert(Trip.end(), {Trp(kx, kx, -(ETAXX1 + ETAXX2) / dx2 - (ETAXY1 + ETAXY2) / dy2 - gx * dt * dRHOdx - inertia * RHOX(i, j) / dt), Trp(kx, kx - Ny1 * Num_var, ETAXX1 / dx2), 
+                                    Trp(kx, kx + Ny1 * Num_var, ETAXX2 / dx2), Trp(kx, kx - Num_var, ETAXY1 / dy2), Trp(kx, kx + Num_var, ETAXY2 / dy2), /* vxs3, vxs1, vxs5, vxs2, vxs4 */
+                                    Trp(kx, ky - Num_var, (ETAXY1 - ETAXX1) / dx_dy - temp), Trp(kx, ky, (ETAXX1 - ETAXY2) / dx_dy - temp),
+                                    Trp(kx, ky - Num_var + Ny1 * Num_var, (ETAXX2 - ETAXY1) / dx_dy - temp), Trp(kx, ky + Ny1 * Num_var, (ETAXY2 - ETAXX2) / dx_dy - temp), /* vys1, vys2, vys3, vys4 */
+                                    Trp(kx, kp, ptscale / dx), Trp(kx, kp + Ny1 * Num_var, -ptscale / dx)}); /* Pt1', Pt2' */
                         // Right part
                         R(kx) = -RHOX(i, j) * (inertia * VX0(i, j) / dt + gx) - (SXX2 - SXX1) / dx - (SXY2 - SXY1) / dy;
                     }
@@ -748,13 +742,13 @@ int main() {
                         // Left boundary
                         // Free Slip
                         if (j == 0) {
-                            Trip.insert(Trip.end(), {Trp(ky, ky, 1), Trp(ky, ky + Ny1 * 6, 1)});
+                            Trip.insert(Trip.end(), {Trp(ky, ky, 1), Trp(ky, ky + Ny1 * Num_var, 1)});
                         }
                         
                         // Right boundary
                         // Free Slip
                         if (j == Nx) {
-                            Trip.insert(Trip.end(), {Trp(ky, ky, 1), Trp(ky, ky - Ny1 * 6, 1)});
+                            Trip.insert(Trip.end(), {Trp(ky, ky, 1), Trp(ky, ky - Ny1 * Num_var, 1)});
                         }
                         
                         // Upper boundary: no penetration
@@ -780,42 +774,32 @@ int main() {
                         //                |
                         //               vys4
                         // Viscosity
-                        double ETAXY1 = ETA(i, j - 1);
-                        double ETAXY2 = ETA(i, j);
-                        double ETAYY1 = ETAP(i, j);
-                        double ETAYY2 = ETAP(i + 1, j);
+                        double ETAXY1 = ETA(i, j - 1), ETAXY2 = ETA(i, j);
+                        double ETAYY1 = ETAP(i, j), ETAYY2 = ETAP(i + 1, j);
                         // Shear modulus
-                        double GXY1 = GGG(i, j - 1);
-                        double GXY2 = GGG(i, j);
-                        double GYY1 = GGGP(i, j);
-                        double GYY2 = GGGP(i + 1, j);
+                        const double GXY1 = GGG(i, j - 1), GXY2 = GGG(i, j);
+                        const double GYY1 = GGGP(i, j), GYY2 = GGGP(i + 1, j);
                         // Viscoelasticity factor
-                        double KXY1 = dt * GXY1 / (dt * GXY1 + ETAXY1);
-                        double KXY2 = dt * GXY2 / (dt * GXY2 + ETAXY2);
-                        double KYY1 = dt * GYY1 / (dt * GYY1 + ETAYY1);
-                        double KYY2 = dt * GYY2 / (dt * GYY2 + ETAYY2);
+                        const double KXY1 = divplus(dt * GXY1, ETAXY1), KXY2 = divplus(dt * GXY2, ETAXY2);
+                        const double KYY1 = divplus(dt * GYY1, ETAYY1), KYY2 = divplus(dt * GYY2, ETAYY2);
                         // Numerical viscosity
                         ETAXY1 *= KXY1;
                         ETAXY2 *= KXY2;
                         ETAYY1 *= KYY1;
                         ETAYY2 *= KYY2;
                         // Numerical stresses
-                        double SXY1 = SXY0(i, j - 1) * (1 - KXY1);
-                        double SXY2 = SXY0(i, j) * (1 - KXY2);
-                        double SYY1 = SYY0(i, j) * (1 - KYY1);
-                        double SYY2 = SYY0(i + 1, j) * (1 - KYY2);
+                        const double SXY1 = SXY0(i, j - 1) * (1 - KXY1), SXY2 = SXY0(i, j) * (1 - KXY2);
+                        const double SYY1 = SYY0(i, j) * (1 - KYY1), SYY2 = SYY0(i + 1, j) * (1 - KYY2);
                         // Density derivatives
-                        double dRHOdy = (RHOY(i + 1, j) - RHOY(i - 1, j)) / 2. / dy;
-                        double dRHOdx = (RHO(i, j) - RHO(i, j - 1)) / dx;
+                        const double dRHOdy = (RHOY(i + 1, j) - RHOY(i - 1, j)) / 2. / dy;
+                        const double dRHOdx = (RHO(i, j) - RHO(i, j - 1)) / dx;
                         // Left part
-                        double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
-                        double temp = gy * dt * dRHOdx / 4.;
-                        double dx_dy = dx * dy;
-                        Trip.insert(Trip.end(), {Trp(ky, ky, -(ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - inertia * RHOY(i, j) / dt), Trp(ky, ky - Ny1 * 6, ETAXY1 / dx2),
-                                    Trp(ky, ky + Ny1 * 6, ETAXY2 / dx2), Trp(ky, ky - 6, ETAYY1 / dy2), Trp(ky, ky + 6, ETAYY2 / dy2), /* vys3, vys1, vys5, vys2, vys4 */
-                                    Trp(ky, kx - Ny1 * 6, ETAXY1 / dx_dy - ETAYY1 / dx_dy - temp), Trp(ky, kx + 6 - Ny1 * 6, -ETAXY1 / dx_dy + ETAYY2 / dx_dy - temp),
-                                    Trp(ky, kx, -ETAXY2 / dx_dy + ETAYY1 / dx_dy - temp), Trp(ky, kx + 6, ETAXY2 / dx_dy - ETAYY2 / dx_dy - temp), /* vxs1, vxs2, vxs3, vxs4 */
-                                    Trp(ky, kp, ptscale / dy), Trp(ky, kp + 6, -ptscale / dy)}); /* Pt1', Pt2' */
+                        const double temp = gy * dt * dRHOdx / 4.;
+                        Trip.insert(Trip.end(), {Trp(ky, ky, -(ETAYY1 + ETAYY2) / dy2 - (ETAXY1 + ETAXY2) / dx2 - gy * dt * dRHOdy - inertia * RHOY(i, j) / dt), Trp(ky, ky - Ny1 * Num_var, ETAXY1 / dx2),
+                                    Trp(ky, ky + Ny1 * Num_var, ETAXY2 / dx2), Trp(ky, ky - Num_var, ETAYY1 / dy2), Trp(ky, ky + Num_var, ETAYY2 / dy2), /* vys3, vys1, vys5, vys2, vys4 */
+                                    Trp(ky, kx - Ny1 * Num_var, (ETAXY1 - ETAYY1) / dx_dy - temp), Trp(ky, kx + Num_var - Ny1 * Num_var, (ETAYY2 - ETAXY1) / dx_dy - temp),
+                                    Trp(ky, kx, (ETAYY1 - ETAXY2) / dx_dy - temp), Trp(ky, kx + Num_var, (ETAXY2 - ETAYY2) / dx_dy - temp), /* vxs1, vxs2, vxs3, vxs4 */
+                                    Trp(ky, kp, ptscale / dy), Trp(ky, kp + Num_var, -ptscale / dy)}); /* Pt1', Pt2' */
                         // Right part
                         R(ky) = -RHOY(i, j) * (inertia * VY0(i, j) / dt + gy) - (SYY2 - SYY1) / dy - (SXY2 - SXY1) / dx;
                     }
@@ -832,11 +816,11 @@ int main() {
                         //               |
                         //              vys2
                         // Drained compressibility
-                        double BETADRAINED = (1. / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                        const double BETADRAINED = (1. / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
-                        double KBW = 1 - BETASOLID / BETADRAINED;
+                        const double KBW = 1 - BETASOLID / BETADRAINED;
                         // Left part
-                        Trip.insert(Trip.end(), {Trp(kp, kx - Ny1 * 6, -1. / dx), Trp(kp, kx, 1. / dx), /* vxs1, vxs2 */ Trp(kp, ky - 6, -1. / dy), Trp(kp, ky, 1. / dy), /* vys1, vys2 */
+                        Trip.insert(Trip.end(), {Trp(kp, kx - Ny1 * Num_var, -1. / dx), Trp(kp, kx, 1. / dx), /* vxs1, vxs2 */ Trp(kp, ky - Num_var, -1. / dy), Trp(kp, ky, 1. / dy), /* vys1, vys2 */
                                     Trp(kp, kp, ptscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED / dt)), Trp(kp, kpf, -pfscale * (1. / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt))}); /* Pt, Pf */
                         // Right part
                         R(kp) = BETADRAINED * (PT0(i, j) - KBW * PF0(i, j)) / dt + DILP(i, j);
@@ -851,12 +835,12 @@ int main() {
                         
                         // Upper boundary: symmetry
                         if (i == 0 && j < Nx) {
-                            Trip.insert(Trip.end(), {Trp(kxf, kxf, 1), Trp(kxf, kxf + 6, -1)});
+                            Trip.insert(Trip.end(), {Trp(kxf, kxf, 1), Trp(kxf, kxf + Num_var, -1)});
                         }
                         
                         // Lower boundary: symmetry
                         if (i == Ny && j < Nx) {
-                            Trip.insert(Trip.end(), {Trp(kxf, kxf, 1), Trp(kxf, kxf - 6, -1)});
+                            Trip.insert(Trip.end(), {Trp(kxf, kxf, 1), Trp(kxf, kxf - Num_var, -1)});
                         }
                         
                         // Left boundary
@@ -878,7 +862,7 @@ int main() {
                         //
                         // Left part
                         Trip.insert(Trip.end(), {Trp(kxf, kxf, -ETADX(i, j) - RHOFX(i, j) / PORX(i, j) * inertia / dt), Trp(kxf, kx, -RHOFX(i, j) * inertia / dt), /* vxD, vxs */
-                                    Trp(kxf, kpf, pfscale / dx), Trp(kxf, kpf + Ny1 * 6, -pfscale / dx)}); /* Pf1', Pf2' */
+                                    Trp(kxf, kpf, pfscale / dx), Trp(kxf, kpf + Ny1 * Num_var, -pfscale / dx)}); /* Pf1', Pf2' */
                         // Right part
                         R(kxf) = -RHOFX(i, j) * (inertia * VXF0(i, j) / dt + gx);
                     }
@@ -893,13 +877,13 @@ int main() {
                         // Left boundary
                         // symmetry
                         if (j == 0 && i > 0 && i < Ny - 1) {
-                            Trip.insert(Trip.end(), {Trp(kyf, kyf, 1), Trp(kyf, kyf + Ny1 * 6, -1)});
+                            Trip.insert(Trip.end(), {Trp(kyf, kyf, 1), Trp(kyf, kyf + Ny1 * Num_var, -1)});
                         }
                         
                         // Right boundary
                         // symmetry
                         if (j == Nx && i > 0 && i < Ny - 1) {
-                            Trip.insert(Trip.end(), {Trp(kyf, kyf, 1), Trp(kyf, kyf - Ny1 * 6, -1)});
+                            Trip.insert(Trip.end(), {Trp(kyf, kyf, 1), Trp(kyf, kyf - Ny1 * Num_var, -1)});
                         }
                         
                         // Upper boundary: no penetration
@@ -924,7 +908,7 @@ int main() {
                         //
                         // Left part
                         Trip.insert(Trip.end(), {Trp(kyf, kyf, -ETADY(i, j) - RHOFY(i, j) / PORY(i, j) * inertia / dt), Trp(kyf, ky, -RHOFY(i, j) * inertia / dt), /* vyD, vys */
-                                    Trp(kyf, kpf, pfscale / dy), Trp(kyf, kpf + 6, -pfscale / dy)}); /* Pf1', Pf2' */
+                                    Trp(kyf, kpf, pfscale / dy), Trp(kyf, kpf + Num_var, -pfscale / dy)}); /* Pf1', Pf2' */
                         // Right part
                         R(kyf) = -RHOFY(i, j) * (inertia * VYF0(i, j) / dt + gy);
                     }
@@ -948,13 +932,13 @@ int main() {
                         //              vyD2
                         // Compute elastic coefficients
                         // Drained compressibility
-                        double BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                        const double BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                         // Biott - Willis koefficient
-                        double KBW = 1 - BETASOLID / BETADRAINED;
+                        const double KBW = 1 - BETASOLID / BETADRAINED;
                         // Skempton koefficient
-                        KSK = (BETADRAINED - BETASOLID) / (BETADRAINED - BETASOLID + POR(i, j) * (BETAFLUID - BETASOLID));
+                        const double KSK = (BETADRAINED - BETASOLID) / (BETADRAINED - BETASOLID + POR(i, j) * (BETAFLUID - BETASOLID));
                         // Left part
-                        Trip.insert(Trip.end(), {Trp(kpf, kxf - Ny1 * 6, -1. / dx), Trp(kpf, kxf, 1. / dx), /* vxs1, vxs2 */ Trp(kpf, kyf - 6, -1. / dy), Trp(kpf, kyf, 1. / dy), /* vys1, vys2 */
+                        Trip.insert(Trip.end(), {Trp(kpf, kxf - Ny1 * Num_var, -1. / dx), Trp(kpf, kxf, 1. / dx), /* vxs1, vxs2 */ Trp(kpf, kyf - Num_var, -1. / dy), Trp(kpf, kyf, 1. / dy), /* vys1, vys2 */
                                     Trp(kpf, kp, -ptscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / dt)), Trp(kpf, kpf, pfscale * (1 / ETAB(i, j) / (1 - POR(i, j)) + BETADRAINED * KBW / KSK / dt))}); /* Pt, Pf */
                         // Right part
                         R(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1. / KSK * PF0(i, j)) / dt - DILP(i, j);
@@ -1017,7 +1001,7 @@ int main() {
             for (int i = 0; i < Ny; i++) {
                 for (int j = 0; j < Nx; j++) {
                     EXY(i, j) = .5 * ((vxs(i + 1, j) - vxs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dx);
-                    KXY = dt * GGG(i, j) / (dt * GGG(i, j) + ETA(i, j));
+                    const double KXY = divplus(dt * GGG(i, j), ETA(i, j));
                     SXY(i, j) = 2 * ETA(i, j) * EXY(i, j) * KXY + SXY0(i, j) * (1 - KXY);
                 }
             }
@@ -1028,7 +1012,7 @@ int main() {
                     // EXX, SXX
                     EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
                     EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
-                    double KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
+                    const double KXX = divplus(dt * GGGP(i, j), ETAP(i, j));
                     SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
                     SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
                 }
@@ -1061,26 +1045,20 @@ int main() {
                     if (i == line_fault) {
                         for (int j = 0; j < Nx; j++) {
                             // reducing matrix calls
-                            double arsf_temp = ARSF(i, j), brsf_temp = BRSF(i, j), lrsf_temp = LRSF(i, j), fric_temp = FRIC(i, j), eta0_temp = ETA0(i, j);
+                            const double arsf_temp = ARSF(i, j), brsf_temp = BRSF(i, j), lrsf_temp = LRSF(i, j), fric_temp = FRIC(i, j), eta0_temp = ETA0(i, j);
 
-                            double sxx_temp_4 = SXX(i, j) + SXX(i + 1, j) + SXX(i, j + 1) + SXX(i + 1, j + 1) / 4.;
-                            double syy_temp_4 = SYY(i, j) + SYY(i + 1, j) + SYY(i, j + 1) + SYY(i + 1, j + 1) / 4.;
-
-                            double ptB, pfB;
+                            const double sxx_temp = SXX.block(i, j, 2, 2).sum();
+                            const double syy_temp = SYY.block(i, j, 2, 2).sum();
 
                             // SXX, pt are averaged from four surrounding pressure nodes
-                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + .5 * pow(sxx_temp_4, 2) + .5 * pow(syy_temp_4, 2) + .5 * pow(-sxx_temp_4 - syy_temp_4, 2)); // - can be changed to + as term is squared ???
-                            ptB = (pt(i, j) + pt(i + 1, j) + pt(i, j + 1) + pt(i + 1, j + 1)) / 4.;
-                            pfB = (pf(i, j) + pf(i + 1, j) + pf(i, j + 1) + pf(i + 1, j + 1)) / 4.;
+                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + (pow(sxx_temp, 2) + pow(syy_temp, 2) + pow(sxx_temp + syy_temp, 2))/ 32.);
                             // Computing "elastic" stress invariant
-                            double kfxy = ETA(i, j) / (GGG(i, j) * dt + ETA(i, j));
-                            double siiel = SIIB(i, j) / kfxy;
-                            // Compute maximal stress invariant with viscous viscosity
-                            double kfxy0 = eta0_temp / (GGG(i, j) * dt + eta0_temp);
+                            const double siiel = SIIB(i, j) / (ETA(i, j) / (GGG(i, j) * dt + ETA(i, j)));
                             
                             // Compute old viscoplastic slip rate
                             // Compute PEFF
-                            double prB = (ptB - pfB);
+                            const double prB_temp = (pt.block(i, j, 2, 2).sum() - pf.block(i, j, 2, 2).sum()) / 4.;
+                            double prB = prB_temp;
                             
                             if (prB < 1e3) {
                                 prB = 1e3;
@@ -1096,7 +1074,7 @@ int main() {
                             double ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
                             double SIIB2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP);
-                            double DSIIB1 = SIIB2 - SIIB1;
+                            const double DSIIB1 = SIIB2 - SIIB1;
                             
                             // Compute slip velocity for current stress invariant and state
                             double V = 2 * V0 * sinh(max(SIIB2, 0.) / arsf_temp / prB) * exp(-(brsf_temp * OM(i, j) + fric_temp) / arsf_temp);
@@ -1107,7 +1085,7 @@ int main() {
                             ETAPL = SIIB2 / 2. / EIISLIP;
                             ETAVP = 1. / (1. / eta0_temp + 1. / ETAPL);
                             // Compute new stress invariant
-                            double DSIIB2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP) - SIIB2;
+                            const double DSIIB2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP) - SIIB2;
                             double SIIB4 = 0.;
                             
                             if ((DSIIB1 >= 0 && DSIIB2 <= 0) || (DSIIB1 <= 0 && DSIIB2 >= 0)) {
@@ -1140,10 +1118,8 @@ int main() {
                                 OM5(i, j) = log(exp(OM0(i, j)) * (1 - V * dt / lrsf_temp) + V0 * dt / lrsf_temp);
                             }
                             
-                            double SIGMA2 = siiel * ETAVP / (GGG(i, j) * dt + ETAVP);
-                            
                             // Compute yielding stress
-                            double syield = max(syieldmin, (ptB - pfB) * arsf_temp * asinh(V / 2. / V0 * exp((brsf_temp * OM5(i, j) + fric_temp) / arsf_temp)));
+                            const double syield = max(syieldmin, prB_temp * arsf_temp * asinh(V / 2. / V0 * exp((brsf_temp * OM5(i, j) + fric_temp) / arsf_temp)));
                             
                             // Compute visco - plastic viscosity
                             double etapl = eta0_temp * syield / (eta0_temp * V + syield);
@@ -1154,14 +1130,12 @@ int main() {
                             SII_fault(i, j) = SIIB4;
 
                             // reduces calls on matrix
-                            double g_temp = 2 * GGG(i, j); // reduces calls on matrix
+                            const double g_temp = 2 * GGG(i, j); // reduces calls on matrix
                             
                             // "/ BETASOLID" -> Timestep criterion, Lapusta et al., 2000; Lapusta and Liu, 2009
-                            double vi = (3. / BETASOLID - g_temp) / (6. / BETASOLID + g_temp);
-                            double k = g_temp / (pi * (1 - vi) * dx);
-                            double xi = pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) / 4. - k * lrsf_temp / arsf_temp / prB;
+                            const double k = g_temp / (pi * (1 - ((3. / BETASOLID - g_temp) / (6. / BETASOLID + g_temp))) * dx);
                             double dTETAmax;
-                            if (xi < 0) {
+                            if ((pow((k * lrsf_temp / prB - brsf_temp) / arsf_temp - 1, 2) / 4. - k * lrsf_temp / arsf_temp / prB) < 0) {
                                 dTETAmax = min(1. - (brsf_temp - arsf_temp) * prB / (k * lrsf_temp), .2);
                             } else {
                                 dTETAmax = min(arsf_temp * prB / (k * lrsf_temp - (brsf_temp - arsf_temp) * prB), .2);
@@ -1178,7 +1152,7 @@ int main() {
                             }
 
                             // Update viscosity
-                            double A = syield / siiel;
+                            const double A = syield / siiel;
                             if (A < 1) {
                                 // New viscosity for the basic node
                                 etapl = dt * GGG(i, j) * A / (1 - A);
@@ -1214,7 +1188,7 @@ int main() {
 
             // connot calculate DSYLSQ(iterstep - 1) if iterstep = 0
             // need to know what to do when iterstep = 0
-            double D_iter = DSYLSQ(iterstep);
+            const double D_iter = DSYLSQ(iterstep);
             double D_iter_quot = 0;
             if (iterstep != 0) {
                 D_iter_quot = D_iter / DSYLSQ(iterstep - 1);
@@ -1292,7 +1266,7 @@ int main() {
             
             // Chose minimal timestep
             if (yn && dt > dtmin) {
-                double dtold = dt;
+                const double dtold = dt;
                 dt = max(min(min(dtx, dty), min(min(dtpl, dtslip), dtlapusta)), dtmin);
                 if (dt < dtold) {
                     ynlast = 0;
@@ -1357,7 +1331,7 @@ int main() {
                 // ESP = .5 *(dVy / dx - dVx / dy), EXY, SXY
                 ESP(i, j) = .5 * ((vys(i, j + 1) - vys(i, j)) / dx - (vxs(i + 1, j) - vxs(i, j)) / dy);
                 EXY(i, j) = .5 * ((vxs(i + 1, j) - vxs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dx);
-                KXY = dt * GGG(i, j) / (dt * GGG(i, j) + ETA(i, j));
+                const double KXY = divplus(dt * GGG(i, j), ETA(i, j));
                 SXY(i, j) = 2 * ETA(i, j) * EXY(i, j) * KXY + SXY0(i, j) * (1 - KXY);
             }
         }
@@ -1369,23 +1343,23 @@ int main() {
                 // EXX, SXX
                 EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
                 EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
-                double KXX = dt * GGGP(i, j) / (dt * GGGP(i, j) + ETAP(i, j));
+                const double KXX = divplus(dt * GGGP(i, j), ETAP(i, j));
                 SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
                 SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
         
                 // Compute stress and strain rate invariants and dissipation
                 Matrix2d temp;
-                temp << SXY(i - 1, j - 1) / (2 * ETA(i - 1, j - 1)), SXY(i - 1, j) / (2 * ETA(i - 1, j)), SXY(i, j - 1) / (2 * ETA(i, j - 1)), SXY(i, j) / (2 * ETA(i, j));
+                temp << SXY(i - 1, j - 1) / ETA(i - 1, j - 1), SXY(i - 1, j) / ETA(i - 1, j), SXY(i, j - 1) / ETA(i, j - 1), SXY(i, j) / ETA(i, j);
 
                 // EXY term is averaged from four surrounding basic nodes
                 EII(i, j) = sqrt(pow(EXX(i, j), 2) + square_block(EXY.block(i - 1, j - 1, 2, 2)) / 4.);
-                EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + square_block(temp) / 4.);
+                EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + square_block(temp / 2.) / 4.);
                 // Second strain rate invariant SII
                 // SXY term is averaged from four surrounding basic nodes
                 SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + square_block(SXY.block(i - 1, j - 1, 2, 2)) / 4.);
                 
                 // Dissipation
-                double DISXY = (pow(SXY(i, j), 2) / 2 * ETA(i, j) + pow(SXY(i - 1, j), 2) / 2 * ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / 2 * ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / 2 * ETA(i - 1, j - 1)) / 4.;
+                double DISXY = (pow(SXY(i, j), 2) / ETA(i, j) + pow(SXY(i - 1, j), 2) /  ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / ETA(i - 1, j - 1)) / 4.;
                 DIS(i, j) = pow(SXX(i, j), 2) / (2 * ETAP(i, j)) + pow(SYY(i, j), 2) / (2 * ETAP(i, j)) + 2 * DISXY;
                 
                 double PT0_ave, PF0_ave;
@@ -1404,9 +1378,9 @@ int main() {
                 // Compute elastic and viscous compaction
                 VIS_COMP(i, j) = (pt_ave(i, j) - pf_ave(i, j)) / (ETAB(i, j) * (1 - POR(i, j)));
                 // Drained compressibility
-                double BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
+                const double BETADRAINED = (1 / GGGB(i, j) + BETASOLID) / (1 - POR(i, j));
                 // Biott - Willis koefficient
-                double KBW = 1 - BETASOLID / BETADRAINED;
+                const double KBW = 1 - BETASOLID / BETADRAINED;
                 EL_DECOM(i, j) = BETADRAINED * (pt_ave(i, j) - PT0_ave - KBW * pf_ave(i, j) + KBW * PF0_ave) / dt;
             }
         }
@@ -1417,8 +1391,8 @@ int main() {
         // for (int m = 0; m < marknum; m++) {
             Vector4d vxm = Vector4d::Zero(), vym = Vector4d::Zero(), spm = Vector4d::Zero(); // Runge-Kutta velocity, spin array
             // Save marker position
-            double xold = xm(m);
-            double yold = ym(m);
+            const double xold = xm(m);
+            const double yold = ym(m);
             for (int rk = 0; rk < 4; rk++) {
                 // vx - velocity interpolation
                 // [i, j] -------- [i, j + 1]
@@ -1481,27 +1455,23 @@ int main() {
                     xm(m) = xold + vxm(rk) * dt;
                     ym(m) = yold + vym(rk) * dt;
                 }
-            }
-            // Compute effective velocity, rotation rate
-            double vxeff = (vxm(0) + 2 * vxm(1) + 2 * vxm(2) + vxm(3)) / 6.;
-            double vyeff = (vym(0) + 2 * vym(1) + 2 * vym(2) + vym(3)) / 6.;
-            
+            }         
             // Rotate stress on marker according to its spin
             // Compute amount of rotation from spin rate:
             // Espin = .5 *(dvy / dx - dvx / dy) i.e. positive for clockwise rotation
             // (when x axis is directed rightward and y axis is directed downward)
-            double dspeff = spm(0) * dt;
+            const double dspeff = spm(0) * dt;
             // Save old stresses
-            double msxxold = sxxm(m);
-            double msyyold = syym(m);
-            double msxyold = sxym(m);
+            const double msxxold = sxxm(m);
+            const double msyyold = syym(m);
+            const double msxyold = sxym(m);
             sxym(m) = .5 * (msxxold - msyyold) * sin(2 * dspeff) + msxyold * cos(2 * dspeff);
             sxxm(m) = msxxold * pow(cos(dspeff), 2) + msyyold * pow(sin(dspeff), 2) - msxyold * sin(2 * dspeff);
             syym(m) = msxxold * pow(sin(dspeff), 2) + msyyold * pow(cos(dspeff), 2) + msxyold * sin(2 * dspeff);
             
             // Move markers
-            xm(m) = xold + vxeff * dt;
-            ym(m) = yold + vyeff * dt;
+            xm(m) = xold + (vxm(0) + 2 * vxm(1) + 2 * vxm(2) + vxm(3)) / 6. * dt;
+            ym(m) = yold + (vym(0) + 2 * vym(1) + 2 * vym(2) + vym(3)) / 6. * dt;
             
             // Recycling
             if (xm(m) < 0) {
@@ -1512,7 +1482,7 @@ int main() {
             }
         }
 
-        int temp = timestep - 1;
+        const int temp = timestep - 1;
         
         // Update timesum
         timesum += dt;
@@ -1702,9 +1672,9 @@ int main() {
                 j++;
             }
 
-            hsize_t dim3[1] = {13};
-            VecXd temp(13);
-            temp << timesum, dt00, dtx, dty, KXY, KSK, dtlapusta, pfscale, ptscale, Vmax, maxvxy, dt, yndtdecrease;
+            hsize_t dim3[1] = {9};
+            VecXd temp(9);
+            temp << timesum, dt00, dtx, dty, dtlapusta, Vmax, maxvxy, dt, yndtdecrease;
             add_vector(save_file_name, group_values, temp, "values", dim3);
         }
 
