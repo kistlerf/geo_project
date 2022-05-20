@@ -11,10 +11,13 @@ typedef VectorXd VecXd;
 typedef MatrixXd MatXd;
 
 // set timestep limit
-const int num_timesteps = 200; // very small number for testing
+const int num_timesteps = 100; // very small number for testing
 
 // Timesteps between visualization frames
-const int savestep = 20;  // storage periodicity
+const int savestep = 50;  // storage periodicity
+
+const bool three_d = false;
+const int Num_var = 6; // set to 7 in three_d = true
 
 // ========================================
 // Define Numerical model
@@ -35,7 +38,7 @@ const double TS_4 = 38e3;
 const int Nx1 = Nx + 1;      // Number of horizontal lines for staggered grid
 const int Ny1 = Ny + 1;      // Number of vertical lines for staggered grid
 
-const int N = Nx1 * Ny1 * 6; // Global number of unknowns
+const int N = Nx1 * Ny1 * Num_var; // Global number of unknowns
 
 // ========================================
 // Output files
@@ -49,6 +52,9 @@ const double xbeg = 0;
 const double xend = xsize;
 const double ybeg = 0;
 const double yend = ysize;
+
+const double dx2 = pow(dx, 2), dy2 = pow(dy, 2);
+const double dx_dy = dx * dy;
 
 const VecXd x = VecXd::LinSpaced(Nx, xbeg, xend); // horizontal coordinates of basic grid points
 const VecXd y = VecXd::LinSpaced(Ny, ybeg, yend); // vertical coordinates of basic grid points
@@ -67,7 +73,7 @@ const double faultwidth = dx;    // Characteristic fault width, m
 const double dtelastic0 = 5e8; // elastic timestep
 const double dtmin = 1e-4;
 
-const double ascale = 1.;
+const double inertia = 1.;
 
 const double lower_block = ysize / 2. + dy;
 const double upper_block = ysize / 2. - dy;
@@ -148,6 +154,24 @@ const double cc1 = 0.37, cc2 = 3.54, cc3 = 0.47;
 
 const VecXd gm = VecXd::Constant(marknum, shearmod); // Standard shear modulus of bulk, Pa
 const VecXd rhofm = VecXd::Constant(marknum, 1000); // Density of fluid
-const VecXd etafm = VecXd::Constant(marknum, 1e-3); // Viscosity of fluid
+const VecXd etafm = VecXd::Constant(marknum, 1e-3); // Viscosity of fluid    
+
+// Lagrangian solid markers
+VecXd t_marker = VecXd::Constant(marknum, 1);         // Marker rock type
+VecXd rhom = VecXd::Constant(marknum, 2800);          // Density of solid
+VecXd etasm = VecXd::Constant(marknum, 1e21);         // Standard shear viscosity of bulk
+VecXd etam(marknum);                                  // Shear viscosity of bulk
+VecXd cohescm = VecXd::Constant(marknum, cohes);      // Cohesion for confined fracture of solid
+VecXd cohestm = VecXd::Constant(marknum, cohes);      // Cohesion for tensile fracture of solid
+VecXd frictcm = VecXd::Constant(marknum, .5);         // friction for confined fracture of solid
+VecXd dilatcm = VecXd::Constant(marknum, dilatation); // dilatation for confined fracture of solid
+VecXd fricttm = VecXd::Constant(marknum, tensile);    // friction for tensile fracture of solid
+VecXd porm(marknum);                                  // Porosity of solid
+VecXd kkkm = VecXd::Constant(marknum, 2e-16);         // Standard permeability of solid
+VecXd xm(marknum);                                    // Horizontal coordinates of solid markers
+VecXd ym(marknum);                                    // Vertical coordinates of solid markers
+VecXd sxxm(marknum);                                  // Marker SIGMAxx', Pa
+VecXd syym(marknum);                                  // Marker SIGMAyy', Pa
+VecXd sxym(marknum);                                  // Marker SIGMAxy', Pa
 
 #endif
