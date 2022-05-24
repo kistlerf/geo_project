@@ -18,7 +18,7 @@ Be aware that you need a valid intel licence to use those.
 =====================================================
 
 The c++ version of this simulation works on the EULER cluster only.
-To run it on a local device or another cluster, the flags would need to be changed accordingly
+To run it on a local device or another cluster, the .sh scripts would need to be changed accordingly.
 
 libraries used:
 
@@ -37,7 +37,7 @@ To run the code on EULER use the
 ```
 env2lmod
 ```
-and the .sh script provided in the corresponding folder of this project.
+and the .sh script provided in the corresponding folder of this project. (These scripts are written for the EULER cluster only!)
 
 =====================================================
 
