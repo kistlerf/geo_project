@@ -66,14 +66,15 @@ MatXd LRSF(Ny, Nx); // L - parameter of RSF
 MatXd pt(Ny1, Nx1);  // Total pressure
 MatXd vxs(Ny1, Nx1); // Solid vx - velocity
 MatXd vys(Ny1, Nx1); // Solid vy - velocity
+MatXd vzs(Ny1, Nx1); // Solid vz - velocity
 MatXd pf(Ny1, Nx1);  // Fluid pressure
 MatXd vxD(Ny1, Nx1); // Darsi vx - velocity
 MatXd vyD(Ny1, Nx1); // Darsi vy - velocity
 
 // Nodal matrices
 // Basic nodes
-MatXd RHO(Ny, Nx), ETA(Ny, Nx), ETA0(Ny, Nx), ETA1(Ny, Nx), ETA5(Ny, Nx), ETA00(Ny, Nx), IETAPLB(Ny, Nx), SXY(Ny, Nx), SXY0(Ny, Nx), YNY0(Ny, Nx), KKK(Ny, Nx),
-      GGG(Ny, Nx), COHC(Ny, Nx), COHT(Ny, Nx), FRIC(Ny, Nx), FRIT(Ny, Nx), DILC(Ny, Nx), TTT(Ny, Nx), EIIB(Ny, Nx), VSLIPB(Ny, Nx);
+MatXd RHO(Ny, Nx), ETA(Ny, Nx), ETA0(Ny, Nx), ETA1(Ny, Nx), ETA5(Ny, Nx), ETA00(Ny, Nx), IETAPLB(Ny, Nx), SXY(Ny, Nx), SXY0(Ny, Nx), SZX0(Ny, Nx), SZY0(Ny, Nx), YNY0(Ny, Nx), KKK(Ny, Nx),
+      GGG(Ny, Nx), COHC(Ny, Nx), COHT(Ny, Nx), FRIC(Ny, Nx), FRIT(Ny, Nx), DILC(Ny, Nx), TTT(Ny, Nx), EIIB(Ny, Nx), VSLIPB(Ny, Nx), SZX(Ny, Nx), SZY(Ny, Nx);
 
 // Pressure nodes
 MatXd ETAB(Ny1, Nx1), ETAB0(Ny1, Nx1), ETAP(Ny1, Nx1), ETAP0(Ny1, Nx1), POR(Ny1, Nx1), GGGP(Ny1, Nx1), GGGB(Ny1, Nx1), PTF0(Ny1, Nx1), PT0(Ny1, Nx1), PF0(Ny1, Nx1), pt_ave(Ny1, Nx1),
@@ -82,9 +83,10 @@ MatXd ETAB(Ny1, Nx1), ETAB0(Ny1, Nx1), ETAP(Ny1, Nx1), ETAP0(Ny1, Nx1), POR(Ny1,
 MatXd RHOX(Ny1, Nx1), RHOFX(Ny1, Nx1), ETADX(Ny1, Nx1), PORX(Ny1, Nx1), VX0(Ny1, Nx1), VXF0(Ny1, Nx1);
 // Vy nodes
 MatXd RHOY(Ny1, Nx1), RHOFY(Ny1, Nx1), ETADY(Ny1, Nx1), PORY(Ny1, Nx1), VY0(Ny1, Nx1), VYF0(Ny1, Nx1);
+// Vz nodes
+MatXd VZ0(Ny1, Nx1);
 
-
-MatXd ESP(Ny, Nx), EXY(Ny, Nx), EXX(Ny1, Nx1), EYY(Ny1, Nx1), EII(Ny1, Nx1), EIIVP(Ny1, Nx1), SII(Ny1, Nx1), DSII(Ny1, Nx1), DIS(Ny1, Nx1);
+MatXd ESP(Ny, Nx), EXY(Ny, Nx), EZX(Ny, Nx), EZY(Ny, Nx), EXX(Ny1, Nx1), EYY(Ny1, Nx1), EII(Ny1, Nx1), EIIVP(Ny1, Nx1), SII(Ny1, Nx1), DSII(Ny1, Nx1), DIS(Ny1, Nx1);
 
 MatXd EL_DECOM(Ny1, Nx1);   // Elastic (de)compaction
 MatXd VIS_COMP(Ny1, Nx1);
@@ -103,26 +105,26 @@ double timesum = 0;
 double dt = dtelastic0;
 bool yndtdecrease = true;
 
-double dt00, dtx, dty, dtlapusta, Vmax, maxvxy;
+double dt00, dtx, dty, dtz, dtlapusta, Vmax, maxvxy;
 
 VecXd DSYLSQ(niterglobal);
 
-MatXd DVX0(Ny1, Nx1), DVY0(Ny1, Nx1), DSY(Ny, Nx), YNY(Ny, Nx), SigmaY(Ny, Nx), SII_fault(Ny, Nx), SIIB(Ny, Nx);
+MatXd DVX0(Ny1, Nx1), DVY0(Ny1, Nx1), DVZ0(Ny1, Nx1), DSY(Ny, Nx), YNY(Ny, Nx), SigmaY(Ny, Nx), SII_fault(Ny, Nx), SIIB(Ny, Nx); // DVX0, DVY0, DVZ0 unused
 
 VecXd timesumcur(num_timesteps), dtcur(num_timesteps);
-VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timesteps), minvysmod(num_timesteps);
+VecXd maxvxsmod(num_timesteps), minvxsmod(num_timesteps), maxvysmod(num_timesteps), minvysmod(num_timesteps), maxvzsmod(num_timesteps), minvzsmod(num_timesteps);
 
 // ====================================================================================
 // end global variable declarations
 // ====================================================================================
 
 // lambda function that rounds towards 0
-auto fix = [](double temp) {
+auto fix = [](const double temp) {
     return temp < 0. ? (int)ceil(temp) : (int)floor(temp);
 };
 
 // lambda function that checks if a value is between a min and max value
-auto enforce_bounds = [](double val, double min, double max) {
+auto enforce_bounds = [](double val, const double min, const double max) {
     if (val < min) {
         val = min;
     } else if (val > max) {
@@ -137,12 +139,12 @@ auto square_block = [](Matrix2d mat) {
 };
 
 // lambda function that computes: x / (x + y)
-auto divplus = [](double x, double y) {
+auto divplus = [](const double x, const double y) {
     return (x / (x + y));
 };
 
 // function that checks if a integer value is bigger than 0 and lower than a set bound
-int check_bounds(int k, int bound) {
+int check_bounds(int k, const int bound) {
     if (k < 0) {
         k = 0;
     } else if (k > bound - 2) {
@@ -192,7 +194,7 @@ int main() {
             etam(m) = 1e23;
             etasm(m) = 1e23;
             rhom(m) = 2800;
-            kkkm(m) = 2e-16; // * (dy / faultwidth)^2;
+            kkkm(m) = 2e-16; // * (dy_faultw)^2;
             cohescm(m) = cohes * 1e3;
             cohestm(m) = cohes * 1e3;
             frictcm(m) = .8;
@@ -207,7 +209,6 @@ int main() {
         string group_vector = "Vector";
         string group_values = "Value";
 
-        // read dummy matrix for testing
         hsize_t dims1[2] = {Ny, Nx};
         string matrix_names[24] = {"SIIB", "OM0", "OM", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY0", "YNY0", "KKK",
                                    "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "VSLIPB"}; // {"names"} has to be the same as in *matrix
@@ -219,10 +220,10 @@ int main() {
         }
 
         hsize_t dims2[2] = {Ny1, Nx1};
-        string matrix_names_plus[32] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
+        string matrix_names_plus[30] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
                                         "SXX0", "SYY0", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_plus
         j = 0;
-        for (auto i : {&pt, &vxs, &vys, &pf, &vxD, &vyD, &DVX0, &DVY0, &ETAB, &ETAB0, &ETAP, &ETAP0, &POR, &GGGP, &GGGB, &PTF0, &PT0, &PF0, &SXX0, &SYY0,
+        for (auto i : {&pt, &vxs, &vys, &pf, &vxD, &vyD, &ETAB, &ETAB0, &ETAP, &ETAP0, &POR, &GGGP, &GGGB, &PTF0, &PT0, &PF0, &SXX0, &SYY0,
                        &RHOX, &RHOFX, &ETADX, &PORX, &VX0, &VXF0, &RHOY, &RHOFY, &ETADY, &PORY, &VY0, &VYF0}) { // {names} *matrix_plus
             *i = read_matrix(filename, group_matrix, matrix_names_plus[j], dims2);
             j++;
@@ -248,6 +249,17 @@ int main() {
         VecXd temp = read_vector(filename, group_values, "values", dim2);
         timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); dtlapusta = temp(4); Vmax = temp(5); maxvxy = temp(6); dt = temp(7), yndtdecrease = temp(8);
 
+        if (antiplane) {
+            string group_antiplane = "Antiplane";
+            SZX0 = read_matrix(filename, group_antiplane, "SZX0", dims1);
+            SZY0 = read_matrix(filename, group_antiplane, "SZY0", dims1);
+
+            VZ0 = read_matrix(filename, group_antiplane, "VZ0", dims2);
+
+            maxvzsmod = read_vector(filename, group_antiplane, "maxvzsmod", dim1);
+            minvzsmod = read_vector(filename, group_antiplane, "minvzsmod", dim1);
+        }
+
         timestep++;
     } else {
         timestep = 1;
@@ -258,8 +270,8 @@ int main() {
         LRSF = MatXd::Constant(Ny, Nx, lrsfm(0)); // L - parameter of RSF
         
         // set matrices to 0
-        for (auto i : {pt, vxs, vys, pf, vxD, vyD, RHO, ETA0, IETAPLB, SXY, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP,
-                       GGGB, PTF0, pt_ave, pf_ave, SXX, SXX0, SYY, SYY0, RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VSLIPB}) {
+        for (auto i : {pt, vxs, vys, pf, vxD, vyD, RHO, ETA0, IETAPLB, SXY, SXY0, SZX0, SZY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP,
+                       GGGB, PTF0, pt_ave, pf_ave, SXX, SXX0, SYY, SYY0, RHOX, RHOFX, ETADX, PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VSLIPB, VZ0}) {
             i.setZero();
         }
 
@@ -593,7 +605,7 @@ int main() {
                         const double SXX_temp = SXX.block(i, j, 2, 2).sum(), SYY_temp = SYY.block(i, j, 2, 2).sum();
                         SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + (pow(SXX_temp, 2) + pow(SYY_temp, 2) + pow(SXX_temp + SYY_temp, 2)) / 32.);
                         IETAPLB(i, j) = (1. / ETA(i, j) - 1. / ETA0(i, j));
-                        EIIB(i, j) = dy / faultwidth * SIIB(i, j) * IETAPLB(i, j) / 2.;
+                        EIIB(i, j) = dy_faultw * SIIB(i, j) * IETAPLB(i, j) / 2.;
                     } else {
                         EIIB(i, j) = 0;
                         IETAPLB(i, j) = 0;
@@ -608,7 +620,7 @@ int main() {
                     const double IETAPL = IETAPLB.block(i - 1, j - 1, 2, 2).sum() / 4.;
                     if (YNY0(i - 1, j - 1) > 0 || YNY0(i, j - 1) > 0 || YNY0(i - 1, j) > 0 || YNY0(i, j) > 0) {
                         ETAP(i, j) = 1. / (1. / ETAP0(i, j) + IETAPL);
-                        ETAB(i, j) = 1. / (1. / ETAB0(i, j) + dy / faultwidth * IETAPL * POR(i, j));
+                        ETAB(i, j) = 1. / (1. / ETAB0(i, j) + dy_faultw * IETAPL * POR(i, j));
                     } else {
                         ETAP(i, j) = ETAP0(i, j);
                         ETAB(i, j) = ETAB0(i, j);
@@ -653,12 +665,13 @@ int main() {
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Computing global indexes for vx, vy, p
-                    int kp = (j * Ny1 + i) * Num_var;
-                    int kx = kp + 1;
-                    int ky = kp + 2;
-                    int kpf = kp + 3;
-                    int kxf = kp + 4;
-                    int kyf = kp + 5;
+                    const int kp = (j * Ny1 + i) * Num_var;
+                    const int kx = kp + 1;
+                    const int ky = kp + 2;
+                    const int kpf = kp + 3;
+                    const int kxf = kp + 4;
+                    const int kyf = kp + 5;
+                    const int kz = kp + 6;
                     
                     // 5a) Composing equation for vxs
                     if (i == 0 || i == Ny || j == 0 || j >= Nx - 1) {
@@ -943,6 +956,68 @@ int main() {
                         // Right part
                         R(kpf) = -BETADRAINED * KBW * (PT0(i, j) - 1. / KSK * PF0(i, j)) / dt - DILP(i, j);
                     }
+                    if (antiplane) {
+                        // 5o) Composing equation for vzs (out-of-plane component)
+                        if (i == 1 || i == Ny1 || j == 1 || j == Nx || j == Nx1) {
+                            // Ghost nodes: 1*vzs=0
+                            if (j == Nx1) {
+                                Trip.push_back(Trp(kz, kz, 1));
+                            }
+                            
+                            // Upper boundary
+                            if (i == 1 && j < Nx1) {
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz + 7, 1)});
+                                R(kz) = 2 * bclower;
+                            }
+                            
+                            // Lower boundary
+                            if (i == Ny1 && j < Nx1) {
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz - 7, 1)});
+                                R(kz) = -2 * bclower;
+                            }
+                            
+                            // Left boundary
+                            if (j == 1 && i > 1 && i < Ny1) {
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz + 7 * Ny1, -1)});
+                            }
+                            
+                            // Right boundary
+                            if (j == Nx && i > 1 && i < Ny1) {
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz - 7 * Ny1, -1)});
+                                R(kz)=0;
+                            }
+                        } else {
+                            // Total Z-Stokes: dSIGMAzxt'/dx+dSIGMAzyt'/dy-dPt/dx=-RHOt*gz
+                            // SIGMAijt=2*ETA*EPSILONijs*K+SIGMAijt0*(1-K)
+                            //             vzs2
+                            //              |
+                            //        (P)  SZY   (P)
+                            //              |
+                            //  vzs1--SZX--vzs3--SZX--vzs5
+                            //              |
+                            //        (P)  SZY   (P)
+                            //              |
+                            //             vzs4
+                            
+                            double ETAXY = ETA(i, j);
+                            // Shear modulus
+                            const double GXY = GGG(i, j);
+                            // Viscoelasticity factor
+                            const double KXY = dt * GXY / (dt * GXY + ETAXY);
+                            // Numerical viscosity
+                            ETAXY = ETAXY * KXY;
+                            // Numerical stresses
+                            const double SZY1 = SZY0(i - 1, j) * (1 - KXY);
+                            const double SZY2 = SZY0(i, j) * (1 - KXY);
+                            const double SZX1 = SZX0(i, j - 1) * (1 - KXY);
+                            const double SZX2 = SZX0(i, j) * (1 - KXY);
+                            // Left part
+                            Trip.insert(Trip.end(), {Trp(kz, kz, -2 * (ETAXY / dx2 + ETAXY / dy2) - RHOX(i, j) / dt), Trp(kz, kz - Ny1 * 7, ETAXY / dx2), Trp(kz, kz + Ny1 * 7, ETAXY / dx2),
+                                                     Trp(kz, kz - 7, ETAXY / dy2), Trp(kz, kz + 7, ETAXY / dy2)}); // vzs3, vzs3, vzs3, vzs2, vzs4
+                            // Right part
+                            R(kz) = -RHOX(i, j) * (VZ0(i, j) / dt) - (SZX2 - SZX1) / dx - (SZY2 - SZY1) / dy;
+                        }
+                    }
                 }
             }
 
@@ -963,7 +1038,7 @@ int main() {
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Global indexes for vx, vy, P
-                    int kp = (j * Ny1 + i) * Num_var;
+                    const int kp = (j * Ny1 + i) * Num_var;
                     // Reload solution
                     pt(i, j) = S(kp) * ptscale;
                     vxs(i, j) = S(kp + 1);
@@ -971,6 +1046,9 @@ int main() {
                     pf(i, j) = S(kp + 3) * pfscale;
                     vxD(i, j) = S(kp + 4);
                     vyD(i, j) = S(kp + 5);
+                    if (antiplane) {
+                        vzs(i, j) = S(kp + 6);
+                    }
                 }
             }
 
@@ -985,6 +1063,11 @@ int main() {
             */
             
             // Velocity change
+            if (antiplane) {
+                vzs.col(Nx1) = vzs.col(Nx);
+                DVZ0 = vzs - VZ0;
+            }
+
             DVX0 = vxs - VX0;
             DVY0 = vys - VY0;
             
@@ -993,16 +1076,19 @@ int main() {
             
             // Plastic iterations
             // Compute strain rate, stress and stress change
-            for (auto i : {EXY, SXY, EXX, SXX, EYY, SYY, EL_DECOM, VIS_COMP}) {
-                i.setZero();
-            }
-
             // Process internal basic nodes
             for (int i = 0; i < Ny; i++) {
                 for (int j = 0; j < Nx; j++) {
                     EXY(i, j) = .5 * ((vxs(i + 1, j) - vxs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dx);
                     const double KXY = divplus(dt * GGG(i, j), ETA(i, j));
                     SXY(i, j) = 2 * ETA(i, j) * EXY(i, j) * KXY + SXY0(i, j) * (1 - KXY);
+
+                    if (antiplane) {
+                        EZX(i, j) = .5 * ((vzs(i, j + 1) - vzs(i, j)) / dx + (vxs(i + 1, j) - vxs(i, j)) / dx);
+                        EZY(i, j) = .5 * ((vzs(i + 1, j) - vzs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dy);
+                        SZX(i, j) = 2 * ETA(i, j) * EZX(i, j) * KXY + SZX0(i, j) * (1 - KXY);
+                        SZY(i, j) = 2 * ETA(i, j) * EZY(i, j) * KXY + SZY0(i, j) * (1 - KXY);
+                    }
                 }
             }
 
@@ -1021,6 +1107,24 @@ int main() {
             // External P - nodes: symmetry
             for (auto i : {pt, pf, EXX, SXX, SXX0, EYY, SYY, SYY0, ETAP, ETAB, GGGP, GGGB}) {
                 copy_bounds(i);
+            }
+
+            if (antiplane) {
+                SZX.col(Nx) = SZX.col(Nx - 1);
+                EZX.col(Nx) = EZX.col(Nx - 1);
+
+                // Compute stress and strain rate invariants and dissipation
+                // Process pressure cells
+                for (int i = 1; i < Ny; i++) {
+                    for (int j = 1; j < Nx; j++) {
+                        // EXY term is averaged from four surrounding basic nodes
+                        EII(i, j) = sqrt(.5 * (pow(EXX(i, j), 2) + pow(EYY(i, j), 2)) + (square_block(EXY.block(i - 1, j - 1, 2, 2)) + square_block(EZX.block(i - 1, j - 1, 2, 2)) + square_block(EZY.block(i - 1, j - 1, 2, 2))) / 4.);
+                        
+                        // Second strain rate invariant SII
+                        // SXY term is averaged from four surrounding basic nodes
+                        SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + (square_block(SXY.block(i - 1, j - 1, 2, 2)) + square_block(SZX.block(i - 1, j - 1, 2, 2)) + square_block(SZY.block(i - 1, j - 1, 2, 2))) / 4.);
+                    }
+                }
             }
 
             // Update viscosity for yielding
@@ -1051,7 +1155,11 @@ int main() {
                             const double syy_temp = SYY.block(i, j, 2, 2).sum();
 
                             // SXX, pt are averaged from four surrounding pressure nodes
-                            SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + (pow(sxx_temp, 2) + pow(syy_temp, 2) + pow(sxx_temp + syy_temp, 2))/ 32.);
+                            if (antiplane) {
+                                SIIB(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + pow(SXY(i, j), 2) + pow(SZX(i, j), 2) + pow(SZY(i, j), 2));                        
+                            } else {
+                                SIIB(i, j) = sqrt(pow(SXY(i, j), 2) + (pow(sxx_temp, 2) + pow(syy_temp, 2) + pow(sxx_temp + syy_temp, 2))/ 32.);
+                            }
                             // Computing "elastic" stress invariant
                             const double siiel = SIIB(i, j) / (ETA(i, j) / (GGG(i, j) * dt + ETA(i, j)));
                             
@@ -1213,7 +1321,13 @@ int main() {
             }
             double maxvxs = max(vxs.maxCoeff(), abs(vxs.minCoeff()));
             double maxvys = max(vys.maxCoeff(), abs(vys.minCoeff()));
-            maxvxy = sqrt(pow(vxs.maxCoeff() - vxs.minCoeff(), 2) + pow(vys.maxCoeff() - vys.minCoeff(), 2));
+            double maxvzs;
+            if (antiplane) {
+                maxvzs = max(vzs.maxCoeff(), abs(vzs.minCoeff()));
+                maxvxy = sqrt(pow(vxs.maxCoeff() - vxs.minCoeff(), 2) + pow(vys.maxCoeff() - vys.minCoeff(), 2) + pow(vzs.maxCoeff() - vzs.minCoeff(), 2));
+            } else {
+                maxvxy = sqrt(pow(vxs.maxCoeff() - vxs.minCoeff(), 2) + pow(vys.maxCoeff() - vys.minCoeff(), 2));
+            }
             double stpmaxcur = stpmax1;
             dtx = dt;
             if (dt > dx * stpmaxcur / maxvxs) {
@@ -1225,6 +1339,15 @@ int main() {
                 dty = dy / dtkoefv * stpmaxcur / maxvys;
                 yn = true;
             }
+            if (antiplane) {
+                dtz = dt;
+                if(dt>dy*stpmaxcur/maxvzs) {
+                    dtz = dx / dtkoefv * stpmaxcur / maxvzs;
+                    yn = true;
+                }
+                maxvzs = 0;
+            }
+
             maxvxs = 0;
             maxvys = 0;
 
@@ -1236,6 +1359,9 @@ int main() {
                     if (yvy(i) >= upper_block && yvy(i) <= lower_block) {
                         maxvys = max(maxvys, abs(vys(i, j)));
                     }
+                    if (antiplane && yvy(i) >= upper_block && yvy(i) <= lower_block) {
+                        maxvzs = max(maxvzs, abs(vzs(i, j)));
+                    }
                 }
             }
             
@@ -1246,6 +1372,10 @@ int main() {
             }
             if (dt > dy * stpmaxcur / maxvys) {
                 dty = dy / dtkoefv * stpmaxcur / maxvys;
+                yn = true;
+            }
+            if (antiplane && dt > dy * stpmaxcur / maxvzs) {
+                dtz = dy / dtkoefv * stpmaxcur / maxvzs;
                 yn = true;
             }
             
@@ -1333,6 +1463,13 @@ int main() {
                 EXY(i, j) = .5 * ((vxs(i + 1, j) - vxs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dx);
                 const double KXY = divplus(dt * GGG(i, j), ETA(i, j));
                 SXY(i, j) = 2 * ETA(i, j) * EXY(i, j) * KXY + SXY0(i, j) * (1 - KXY);
+
+                if (antiplane) {
+                    EZX(i, j) = .5 *((vzs(i, j + 1) - vzs(i, j)) / dx + (vxs(i + 1, j) - vxs(i, j)) / dx);
+                    EZY(i, j) = .5 *((vzs(i + 1, j) - vzs(i, j)) / dy + (vys(i, j + 1) - vys(i, j)) / dy);
+                    SZX(i, j) = 2 * ETA(i, j) * EZX(i, j) * KXY + SZX0(i, j) * (1 - KXY);
+                    SZY(i, j) = 2 * ETA(i, j) * EZY(i, j) * KXY + SZY0(i, j) * (1 - KXY);
+                }
             }
         }
 
@@ -1340,27 +1477,42 @@ int main() {
         // #pragma omp parallel for collapse(2) // about 2x faster with n = 4 but breaks the simulation
         for (int i = 1; i < Ny; i++) {
             for (int j = 1; j < Nx; j++) {
-                // EXX, SXX
-                EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
-                EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
-                const double KXX = divplus(dt * GGGP(i, j), ETAP(i, j));
-                SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
-                SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
-        
-                // Compute stress and strain rate invariants and dissipation
-                Matrix2d temp;
-                temp << SXY(i - 1, j - 1) / ETA(i - 1, j - 1), SXY(i - 1, j) / ETA(i - 1, j), SXY(i, j - 1) / ETA(i, j - 1), SXY(i, j) / ETA(i, j);
+                if (antiplane) {
+                    // EXY term is averaged from four surrounding basic nodes
+                    EII(i, j) = sqrt(pow(EXX(i, j), 2) + (square_block(EXY.block(i - 1, j - 1, 2, 2)) + square_block(EZX.block(i - 1, j - 1, 2, 2)) + square_block(EZY.block(i - 1, j - 1, 2, 2))) / 4.);
+                    
+                    // Second strain rate invariant SII
+                    // SXY term is averaged from four surrounding basic nodes
+                    SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + (square_block(SXY.block(i - 1, j - 1, 2, 2)) + square_block(SZX.block(i - 1, j - 1, 2, 2)) + square_block(SZY.block(i - 1, j - 1, 2, 2))) / 4.);
+                    
+                    // Dissipation
+                    const double DISXY = pow(SXY(i, j), 2) / ETA(i, j) + pow(SXY(i - 1, j), 2) / ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / ETA(i - 1, j - 1);
+                    const double DISZX = pow(SZX(i, j), 2) / ETA(i, j) + pow(SZX(i - 1, j), 2) / ETA(i - 1, j) + pow(SZX(i, j - 1), 2) / ETA(i, j - 1) + pow(SZX(i - 1, j - 1), 2) / ETA(i - 1, j - 1);
+                    const double DISZY = pow(SZY(i, j), 2) / ETA(i, j) + pow(SZY(i - 1, j), 2) / ETA(i - 1, j) + pow(SZY(i, j - 1), 2) / ETA(i, j - 1) + pow(SZY(i - 1, j - 1), 2) / ETA(i - 1, j - 1);
+                    DIS(i, j) = (pow(SXX(i, j), 2) / ETAP(i, j) + pow(SYY(i, j), 2) / ETAP(i, j) + (DISXY + DISZX + DISZY) / 2.) / 2.;
+                } else {
+                    // EXX, SXX
+                    EXX(i, j) = (2 * (vxs(i, j) - vxs(i, j - 1)) / dx - (vys(i, j) - vys(i - 1, j)) / dy) / 3.;
+                    EYY(i, j) = (2 * (vys(i, j) - vys(i - 1, j)) / dy - (vxs(i, j) - vxs(i, j - 1)) / dx) / 3.;
+                    const double KXX = divplus(dt * GGGP(i, j), ETAP(i, j));
+                    SXX(i, j) = 2 * ETAP(i, j) * EXX(i, j) * KXX + SXX0(i, j) * (1 - KXX);
+                    SYY(i, j) = 2 * ETAP(i, j) * EYY(i, j) * KXX + SYY0(i, j) * (1 - KXX);
+            
+                    // Compute stress and strain rate invariants and dissipation
+                    Matrix2d temp;
+                    temp << SXY(i - 1, j - 1) / ETA(i - 1, j - 1), SXY(i - 1, j) / ETA(i - 1, j), SXY(i, j - 1) / ETA(i, j - 1), SXY(i, j) / ETA(i, j);
 
-                // EXY term is averaged from four surrounding basic nodes
-                EII(i, j) = sqrt(pow(EXX(i, j), 2) + square_block(EXY.block(i - 1, j - 1, 2, 2)) / 4.);
-                EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + square_block(temp / 2.) / 4.);
-                // Second strain rate invariant SII
-                // SXY term is averaged from four surrounding basic nodes
-                SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + square_block(SXY.block(i - 1, j - 1, 2, 2)) / 4.);
-                
-                // Dissipation
-                double DISXY = (pow(SXY(i, j), 2) / ETA(i, j) + pow(SXY(i - 1, j), 2) /  ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / ETA(i - 1, j - 1)) / 4.;
-                DIS(i, j) = pow(SXX(i, j), 2) / (2 * ETAP(i, j)) + pow(SYY(i, j), 2) / (2 * ETAP(i, j)) + 2 * DISXY;
+                    // EXY term is averaged from four surrounding basic nodes
+                    EII(i, j) = sqrt(pow(EXX(i, j), 2) + square_block(EXY.block(i - 1, j - 1, 2, 2)) / 4.);
+                    EIIVP(i, j) = sqrt(.5 * (pow(SXX(i, j) / (2 * ETAP(i, j)), 2) + pow(SYY(i, j) / (2 * ETAP(i, j)), 2)) + square_block(temp) / 16.);
+                    // Second strain rate invariant SII
+                    // SXY term is averaged from four surrounding basic nodes
+                    SII(i, j) = sqrt(.5 * (pow(SXX(i, j), 2) + pow(SYY(i, j), 2)) + square_block(SXY.block(i - 1, j - 1, 2, 2)) / 4.);
+                    
+                    // Dissipation
+                    double DISXY = (pow(SXY(i, j), 2) / ETA(i, j) + pow(SXY(i - 1, j), 2) / ETA(i - 1, j) + pow(SXY(i, j - 1), 2) / ETA(i, j - 1) + pow(SXY(i - 1, j - 1), 2) / ETA(i - 1, j - 1)) / 2.;
+                    DIS(i, j) = pow(SXX(i, j), 2) / (2 * ETAP(i, j)) + pow(SYY(i, j), 2) / (2 * ETAP(i, j)) + DISXY;
+                }
                 
                 double PT0_ave, PF0_ave;
                 if (i < Ny - 1) {
@@ -1493,9 +1645,14 @@ int main() {
         minvxsmod(temp) = 1e30;
         maxvysmod(temp) = -1e30;
         minvysmod(temp) = 1e30;
+        maxvzsmod(temp) = -1e30;
+        minvzsmod(temp) = 1e30;
 
         VX0 = vxs;
         VY0 = vys;
+        if (antiplane) {
+            VZ0 = vzs;
+        }
         
         for (int i = 0; i < Ny; i++) {
             for (int j = 0; j < Nx; j++) {
@@ -1508,6 +1665,11 @@ int main() {
                 if (RHOY(i, j) > 2000 && j != 0) {
                     maxvysmod(temp) = max(maxvysmod(temp), vys(i, j));
                     minvysmod(temp) = min(minvysmod(temp), vys(i, j));
+                }
+                // Vz
+                if (antiplane && RHOY(i, j) > 2000) {
+                    maxvzsmod(temp) = max(maxvzsmod(temp), vzs(i, j));
+                    minvzsmod(temp) = min(minvzsmod(temp), vzs(i, j));
                 }
             }
         }
@@ -1531,6 +1693,12 @@ int main() {
         SYY0 = SYY;
         // Update SXY0
         SXY0 = SXY;
+        if (antiplane) {
+            // Update SZX0
+            SZX0 = SZX;
+            // Update SZY0
+            SZY0 = SZY;
+        }
         // Update PTF0
         PTF0 = (pt - pf);
         PT0 = pt;
@@ -1647,11 +1815,11 @@ int main() {
             }
 
             hsize_t dims2[2] = {Ny1, Nx1};
-            string matrix_names_plus[32] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "DVX0", "DVY0", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
+            string matrix_names_plus[30] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
                                             "SXX0", "SYY0", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_plus
             j = 0;
-            for (auto i : {pt, vxs, vys, pf, vxD, vyD, DVX0, DVY0, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, SXX0, SYY0, RHOX, RHOFX, ETADX,
-                           PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0}) { // {names} *matrix_plus
+            for (auto i : {pt, vxs, vys, pf, vxD, vyD, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, SXX0, SYY0, RHOX, RHOFX, ETADX,
+                           PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VZ0}) { // {names} *matrix_plus
                 add_matrix(save_file_name, group_matrix, i, matrix_names_plus[j], dims2);
                 j++;
             }
@@ -1676,6 +1844,18 @@ int main() {
             VecXd temp(9);
             temp << timesum, dt00, dtx, dty, dtlapusta, Vmax, maxvxy, dt, yndtdecrease;
             add_vector(save_file_name, group_values, temp, "values", dim3);
+
+            if (antiplane) {
+                string group_antiplane = "Antiplane";
+                add_group(save_file_name, group_antiplane);
+                add_matrix(save_file_name, group_antiplane, SZX0, "SZX0", dims1);
+                add_matrix(save_file_name, group_antiplane, SZY0, "SZY0", dims1);
+
+                add_matrix(save_file_name, group_antiplane, VZ0, "VZ0", dims2);
+
+                add_vector(save_file_name, group_antiplane, maxvzsmod, "maxvzsmod", dim1);
+                add_vector(save_file_name, group_antiplane, minvzsmod, "minvzsmod", dim1);
+            }
         }
 
         out_stop = hrc::now();
