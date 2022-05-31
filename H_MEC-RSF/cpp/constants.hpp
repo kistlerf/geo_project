@@ -11,13 +11,11 @@ typedef VectorXd VecXd;
 typedef MatrixXd MatXd;
 
 // set timestep limit
-const int num_timesteps = 100; // very small number for testing
+const int num_timesteps = 50000;    // max number of timesteps
+const int savestep = 500;           // storage periodicity
 
-// Timesteps between visualization frames
-const int savestep = 50;  // storage periodicity
-
-const bool three_d = false;
-const int Num_var = 6; // set to 7 in three_d = true
+const bool antiplane = false;
+const int Num_var = 6; // set to 7 in antiplane = true
 
 // ========================================
 // Define Numerical model
@@ -35,8 +33,8 @@ const double TS_3 = 34e3;
 const double TS_4 = 38e3;
 
 // Eulerian Staggered Grid
-const int Nx1 = Nx + 1;      // Number of horizontal lines for staggered grid
-const int Ny1 = Ny + 1;      // Number of vertical lines for staggered grid
+const int Nx1 = Nx + 1;     // Number of horizontal lines for staggered grid
+const int Ny1 = Ny + 1;     // Number of vertical lines for staggered grid
 
 const int N = Nx1 * Ny1 * Num_var; // Global number of unknowns
 
@@ -173,5 +171,7 @@ VecXd ym(marknum);                                    // Vertical coordinates of
 VecXd sxxm(marknum);                                  // Marker SIGMAxx', Pa
 VecXd syym(marknum);                                  // Marker SIGMAyy', Pa
 VecXd sxym(marknum);                                  // Marker SIGMAxy', Pa
+
+const double dy_faultw = dy / faultwidth;
 
 #endif
