@@ -661,7 +661,7 @@ int main() {
             Trip.reserve(N * 10); // reserving memory space for all the entries to be stored with some reserve
 
             R.setZero();
-            
+
             for (int j = 0; j < Nx1; j++) {
                 for (int i = 0; i < Ny1; i++) {
                     // Computing global indexes for vx, vy, p
@@ -927,7 +927,7 @@ int main() {
                     }
                                         
                     // 5f) Composing equation for Pf
-                    if (j == 0 || j == Nx || i <= 1 || i >= Ny - 1) { //same if clause but more compact
+                    if (j == 0 || j == Nx || i <= 1 || i >= Ny - 1) {
                         // BC equation: 1 * Pf = 0
                         // Real BC
                         if (i == 1 || i == Ny - 1) {
@@ -958,7 +958,7 @@ int main() {
                     }
                     if (antiplane) {
                         // 5o) Composing equation for vzs (out-of-plane component)
-                        if (i == 1 || i == Ny1 || j == 1 || j == Nx || j == Nx1) {
+                        if (i == 0 || i == Ny || j == 0 || j >= Nx - 1) {
                             // Ghost nodes: 1*vzs=0
                             if (j == Nx1) {
                                 Trip.push_back(Trp(kz, kz, 1));
@@ -966,24 +966,24 @@ int main() {
                             
                             // Upper boundary
                             if (i == 1 && j < Nx1) {
-                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz + 7, 1)});
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz + Num_var, 1)});
                                 R(kz) = 2 * bclower;
                             }
                             
                             // Lower boundary
                             if (i == Ny1 && j < Nx1) {
-                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz - 7, 1)});
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz - Num_var, 1)});
                                 R(kz) = -2 * bclower;
                             }
                             
                             // Left boundary
                             if (j == 1 && i > 1 && i < Ny1) {
-                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz + 7 * Ny1, -1)});
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz + Num_var * Ny1, -1)});
                             }
                             
                             // Right boundary
                             if (j == Nx && i > 1 && i < Ny1) {
-                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz - 7 * Ny1, -1)});
+                                Trip.insert(Trip.end(), {Trp(kz, kz, 1), Trp(kz, kz - Num_var * Ny1, -1)});
                                 R(kz)=0;
                             }
                         } else {
@@ -1012,8 +1012,8 @@ int main() {
                             const double SZX1 = SZX0(i, j - 1) * (1 - KXY);
                             const double SZX2 = SZX0(i, j) * (1 - KXY);
                             // Left part
-                            Trip.insert(Trip.end(), {Trp(kz, kz, -2 * (ETAXY / dx2 + ETAXY / dy2) - RHOX(i, j) / dt), Trp(kz, kz - Ny1 * 7, ETAXY / dx2), Trp(kz, kz + Ny1 * 7, ETAXY / dx2),
-                                                     Trp(kz, kz - 7, ETAXY / dy2), Trp(kz, kz + 7, ETAXY / dy2)}); // vzs3, vzs3, vzs3, vzs2, vzs4
+                            Trip.insert(Trip.end(), {Trp(kz, kz, -2 * (ETAXY / dx2 + ETAXY / dy2) - RHOX(i, j) / dt), Trp(kz, kz - Ny1 * Num_var, ETAXY / dx2), Trp(kz, kz + Ny1 * Num_var, ETAXY / dx2),
+                                                     Trp(kz, kz - Num_var, ETAXY / dy2), Trp(kz, kz + Num_var, ETAXY / dy2)}); // vzs3, vzs3, vzs3, vzs2, vzs4
                             // Right part
                             R(kz) = -RHOX(i, j) * (VZ0(i, j) / dt) - (SZX2 - SZX1) / dx - (SZY2 - SZY1) / dy;
                         }
@@ -1064,7 +1064,7 @@ int main() {
             
             // Velocity change
             if (antiplane) {
-                vzs.col(Nx1) = vzs.col(Nx);
+                vzs.col(Nx) = vzs.col(Nx - 1);
                 DVZ0 = vzs - VZ0;
             }
 
@@ -1073,7 +1073,7 @@ int main() {
             
             // Define timestep
             bool yn = false;
-            
+
             // Plastic iterations
             // Compute strain rate, stress and stress change
             // Process internal basic nodes
@@ -1110,8 +1110,8 @@ int main() {
             }
 
             if (antiplane) {
-                SZX.col(Nx) = SZX.col(Nx - 1);
-                EZX.col(Nx) = EZX.col(Nx - 1);
+                SZX.col(Nx - 1) = SZX.col(Nx - 2);
+                EZX.col(Nx - 1) = EZX.col(Nx - 2);
 
                 // Compute stress and strain rate invariants and dissipation
                 // Process pressure cells
@@ -1341,13 +1341,12 @@ int main() {
             }
             if (antiplane) {
                 dtz = dt;
-                if(dt>dy*stpmaxcur/maxvzs) {
+                if(dt > dy * stpmaxcur / maxvzs) {
                     dtz = dx / dtkoefv * stpmaxcur / maxvzs;
                     yn = true;
                 }
                 maxvzs = 0;
             }
-
             maxvxs = 0;
             maxvys = 0;
 
@@ -1378,7 +1377,7 @@ int main() {
                 dtz = dy / dtkoefv * stpmaxcur / maxvzs;
                 yn = true;
             }
-            
+
             dtslip = 1e30;
             for (int i = 0; i < Ny; i++) {
                 for (int j = 0; j < Nx; j++) {
@@ -1472,7 +1471,7 @@ int main() {
                 }
             }
         }
-
+        
         // Process pressure cells
         // #pragma omp parallel for collapse(2) // about 2x faster with n = 4 but breaks the simulation
         for (int i = 1; i < Ny; i++) {
