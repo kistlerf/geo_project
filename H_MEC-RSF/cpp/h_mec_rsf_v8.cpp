@@ -1807,8 +1807,7 @@ int main() {
             string matrix_names[24] = {"SIIB", "OM0", "OM", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY0", "YNY0", "KKK",
                                        "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "VSLIPB"}; // {"names"} has to be the same as in *matrix
             int j = 0;
-            for (auto i : {SIIB, OM0, OM, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00, IETAPLB, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB,
-                           VSLIPB}) { // {names} *matrix
+            for (auto i : {SIIB, OM0, OM, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00, IETAPLB, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, VSLIPB}) { // {names} *matrix
                 add_matrix(save_file_name, group_matrix, i, matrix_names[j], dims1);
                 j++;
             }
@@ -1818,7 +1817,7 @@ int main() {
                                             "SXX0", "SYY0", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_plus
             j = 0;
             for (auto i : {pt, vxs, vys, pf, vxD, vyD, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, SXX0, SYY0, RHOX, RHOFX, ETADX,
-                           PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0, VZ0}) { // {names} *matrix_plus
+                           PORX, VX0, VXF0, RHOY, RHOFY, ETADY, PORY, VY0, VYF0}) { // {names} *matrix_plus
                 add_matrix(save_file_name, group_matrix, i, matrix_names_plus[j], dims2);
                 j++;
             }
