@@ -161,6 +161,20 @@ void copy_bounds(MatXd& Temp) {
     Temp.row(Ny) = Temp.row(Ny - 1);
 }
 
+void remove_double_output(const string file_name, const int num) {
+    ifstream file(file_name);
+    string new_content = "";
+    string line;
+    for (int i = 0; i < num; i++) {
+        getline(file, line);
+        new_content += line + '\n';
+    }
+    file.close();
+    ofstream file_out(file_name);
+    file_out << new_content;
+    file_out.close();
+}
+
 int main() {
     Eigen::initParallel();
     // ====================================================================================
@@ -204,13 +218,13 @@ int main() {
     }
 
     if (timestep > 0) {
-        string filename = nname + to_string(timestep) + ".h5";
-        string group_matrix = "Matrix";
-        string group_vector = "Vector";
-        string group_values = "Value";
+        const string filename = nname + to_string(timestep) + ".h5";
+        const string group_matrix = "Matrix";
+        const string group_vector = "Vector";
+        const string group_values = "Value";
 
-        hsize_t dims1[2] = {Ny, Nx};
-        string matrix_names[24] = {"SIIB", "OM0", "OM", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY0", "YNY0", "KKK",
+        const hsize_t dims1[2] = {Ny, Nx};
+        const string matrix_names[24] = {"SIIB", "OM0", "OM", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY0", "YNY0", "KKK",
                                    "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "VSLIPB"}; // {"names"} has to be the same as in *matrix
         int j = 0;
         for (auto i : {&SIIB, &OM0, &OM, &ARSF, &BRSF, &LRSF, &RHO, &ETA0, &ETA1, &ETA5, &ETA00, &IETAPLB, &SXY0, &YNY0, &KKK, &GGG, &COHC, &COHT, &FRIC, &FRIT,
@@ -219,8 +233,8 @@ int main() {
             j++;
         }
 
-        hsize_t dims2[2] = {Ny1, Nx1};
-        string matrix_names_plus[30] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
+        const hsize_t dims2[2] = {Ny1, Nx1};
+        const string matrix_names_plus[30] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
                                         "SXX0", "SYY0", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_plus
         j = 0;
         for (auto i : {&pt, &vxs, &vys, &pf, &vxD, &vyD, &ETAB, &ETAB0, &ETAP, &ETAP0, &POR, &GGGP, &GGGB, &PTF0, &PT0, &PF0, &SXX0, &SYY0,
@@ -229,28 +243,28 @@ int main() {
             j++;
         }
         
-        hsize_t dim1[1] = {num_timesteps};
-        string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
+        const hsize_t dim1[1] = {num_timesteps};
+        const string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
         j = 0;
         for (auto i : {&timesumcur, &dtcur, &maxvxsmod, &minvxsmod, &maxvysmod, &minvysmod}) { // {names} *vec
             *i = read_vector(filename, group_vector, vector_names[j], dim1);
             j++;
         }
 
-        hsize_t dim3[1] = {marknum};
-        string vector_names_marker[5] = {"xm", "ym", "sxxm", "syym", "sxym"}; // {"names"} has to be the same as in *vec2
+        const hsize_t dim3[1] = {marknum};
+        const string vector_names_marker[5] = {"xm", "ym", "sxxm", "syym", "sxym"}; // {"names"} has to be the same as in *vec2
         j = 0;
         for (auto i : {&xm, &ym, &sxxm, &syym, &sxym}) { // {names} *vec2
             *i = read_vector(filename, group_vector, vector_names_marker[j], dim3);
             j++;
         }
 
-        hsize_t dim2[1] = {9};
-        VecXd temp = read_vector(filename, group_values, "values", dim2);
+        const hsize_t dim2[1] = {9};
+        const VecXd temp = read_vector(filename, group_values, "values", dim2);
         timesum = temp(0); dt00 = temp(1); dtx = temp(2); dty = temp(3); dtlapusta = temp(4); Vmax = temp(5); maxvxy = temp(6); dt = temp(7), yndtdecrease = temp(8);
 
         if (antiplane) {
-            string group_antiplane = "Antiplane";
+            const string group_antiplane = "Antiplane";
             SZX0 = read_matrix(filename, group_antiplane, "SZX0", dims1);
             SZY0 = read_matrix(filename, group_antiplane, "SZY0", dims1);
 
@@ -1728,7 +1742,21 @@ int main() {
             out_rsf << ARSF.row(line_fault) << "\n\n" << BRSF.row(line_fault) << "\n\n" << LRSF.row(line_fault) << endl;
             out_rsf.close();
         }
-            
+
+        int num_lines = 0;
+        string line;
+        ifstream myfile("EVO_data.txt");
+        while (getline(myfile, line)) {++num_lines;}
+        myfile.close();
+        
+        if (num_lines >= timestep) {
+            const string files[11] = {"EVO_Vslip.txt", "EVO_viscosity.txt", "EVO_press_flu.txt", "EVO_press_eff.txt", "EVO_SigmaY.txt", "EVO_Sii.txt", "EVO_Theta.txt", 
+                                      "EVO_Visc_comp.txt", "EVO_Elast_comp.txt", "EVO_VxD.txt", "EVO_data.txt"};
+            for (int i = 0; i < 11; i++) {
+                remove_double_output(files[i], timestep - 1);
+            }
+        }
+
         // ========== save slip rate
         ofstream out_Vslip("EVO_Vslip.txt", ios_base::app | ios_base::out);
         out_Vslip << timesum << "    " << dt << "    " << VSLIPB.row(line_fault) << endl;
@@ -1791,10 +1819,10 @@ int main() {
             out_file << timestep << endl;
             out_file.close();
 
-            string save_file_name = nname + to_string(timestep) + ".h5";
-            string group_matrix = "Matrix";
-            string group_vector = "Vector";
-            string group_values = "Value";
+            const string save_file_name = nname + to_string(timestep) + ".h5";
+            const string group_matrix = "Matrix";
+            const string group_vector = "Vector";
+            const string group_values = "Value";
 
             create_file(save_file_name);
             for (auto i : {group_matrix,  group_vector, group_values}){
@@ -1803,8 +1831,8 @@ int main() {
 
             // save matrices and vectors to restart the simulation from a certain timestep.
             // !!! Always change both the string array and loop order !!!
-            hsize_t dims1[2] = {Ny, Nx};
-            string matrix_names[24] = {"SIIB", "OM0", "OM", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY0", "YNY0", "KKK",
+            const hsize_t dims1[2] = {Ny, Nx};
+            const string matrix_names[24] = {"SIIB", "OM0", "OM", "ARSF", "BRSF", "LRSF", "RHO", "ETA0", "ETA1", "ETA5", "ETA00", "IETAPLB", "SXY0", "YNY0", "KKK",
                                        "GGG", "COHC", "COHT", "FRIC", "FRIT", "DILC", "TTT", "EIIB", "VSLIPB"}; // {"names"} has to be the same as in *matrix
             int j = 0;
             for (auto i : {SIIB, OM0, OM, ARSF, BRSF, LRSF, RHO, ETA0, ETA1, ETA5, ETA00, IETAPLB, SXY0, YNY0, KKK, GGG, COHC, COHT, FRIC, FRIT, DILC, TTT, EIIB, VSLIPB}) { // {names} *matrix
@@ -1812,8 +1840,8 @@ int main() {
                 j++;
             }
 
-            hsize_t dims2[2] = {Ny1, Nx1};
-            string matrix_names_plus[30] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
+            const hsize_t dims2[2] = {Ny1, Nx1};
+            const string matrix_names_plus[30] = {"pt", "vxs", "vys", "pf", "vxD", "vyD", "ETAB", "ETAB0", "ETAP", "ETAP0", "POR", "GGGP", "GGGB", "PTF0", "PT0", "PF0",
                                             "SXX0", "SYY0", "RHOX", "RHOFX", "ETADX", "PORX", "VX0", "VXF0", "RHOY", "RHOFY", "ETADY", "PORY", "VY0", "VYF0"}; // {"names"} has to be the same as in *matrix_plus
             j = 0;
             for (auto i : {pt, vxs, vys, pf, vxD, vyD, ETAB, ETAB0, ETAP, ETAP0, POR, GGGP, GGGB, PTF0, PT0, PF0, SXX0, SYY0, RHOX, RHOFX, ETADX,
@@ -1822,29 +1850,29 @@ int main() {
                 j++;
             }
             
-            hsize_t dim1[1] = {num_timesteps};
-            string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
+            const hsize_t dim1[1] = {num_timesteps};
+            const string vector_names[6] = {"timesumcur", "dtcur", "maxvxsmod", "minvxsmod", "maxvysmod", "minvysmod"}; // {"names"} has to be the same as in *vec
             j = 0;
             for (auto i : {timesumcur, dtcur, maxvxsmod, minvxsmod, maxvysmod, minvysmod}) { // {names} *vec
                 add_vector(save_file_name, group_vector, i, vector_names[j], dim1);
                 j++;
             }
 
-            hsize_t dim2[1] = {marknum};
-            string vector_names_marker[5] = {"xm", "ym", "sxxm", "syym", "sxym"}; // {"names"} has to be the same as in *vec2
+            const hsize_t dim2[1] = {marknum};
+            const string vector_names_marker[5] = {"xm", "ym", "sxxm", "syym", "sxym"}; // {"names"} has to be the same as in *vec2
             j = 0;
             for (auto i : {xm, ym, sxxm, syym, sxym}) { // {names} *vec2
                 add_vector(save_file_name, group_vector, i, vector_names_marker[j], dim2);
                 j++;
             }
 
-            hsize_t dim3[1] = {9};
+            const hsize_t dim3[1] = {9};
             VecXd temp(9);
             temp << timesum, dt00, dtx, dty, dtlapusta, Vmax, maxvxy, dt, yndtdecrease;
             add_vector(save_file_name, group_values, temp, "values", dim3);
 
             if (antiplane) {
-                string group_antiplane = "Antiplane";
+                const string group_antiplane = "Antiplane";
                 add_group(save_file_name, group_antiplane);
                 add_matrix(save_file_name, group_antiplane, SZX0, "SZX0", dims1);
                 add_matrix(save_file_name, group_antiplane, SZY0, "SZY0", dims1);
