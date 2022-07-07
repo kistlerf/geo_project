@@ -14,8 +14,8 @@ with variable viscosity and Darsi + continuity equations
 Total X - Stokes: dSIGMAxxt' / dx + dSIGMAxyt' / dy - dPt / dx = -RHOt * gx
 Total Y - Stokes: dSIGMAyxt' / dx + dSIGMAyyt' / dy - dPt / dy = -RHOt * gy
 Solid Continuity: dVxs / dx + dVys / dy + (Pt - Pf) / ETAbulk = 0
-Fluid X - Darsi:  - ETAfluid / K * VxD - dPf / dx = -RHOf * gx
-Fluid Y - Darsi:  - ETAfluid / K * VyD - dPf / dy = -RHOf * gy
+Fluid X - Darsi: - ETAfluid / K * VxD - dPf / dx = -RHOf * gx
+Fluid Y - Darsi: - ETAfluid / K * VyD - dPf / dy = -RHOf * gy
 Fluid Continuity: dVxD / dx + dVyD / dy - (Pt - Pf) / ETAbulk = 0
 + staggered grid
 + P - v formulation
