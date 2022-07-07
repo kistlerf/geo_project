@@ -11,7 +11,7 @@ typedef VectorXd VecXd;
 typedef MatrixXd MatXd;
 
 // set timestep limit
-const int num_timesteps = 50000;    // max number of timesteps
+const int num_timesteps = 100000;    // max number of timesteps
 const int savestep = 500;           // storage periodicity
 
 const bool antiplane = false;
