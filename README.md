@@ -43,3 +43,7 @@ and the .sh script provided in the corresponding folder of this project. (These 
 
 Please use the newest version.
 Older versions can be found int the folder H_MEC_RSF/cpp/old_versions. Be careful using these as not all of them work nor guarantee correct results.
+
+=====================================================
+
+Most of the initial conditions (e.g., grid size, number of timesteps and savestep) can be found in the constants.hpp file and have to be changed there.
